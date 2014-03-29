@@ -7,14 +7,14 @@ using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace NiL.WBE.DataBase
+namespace NiL.BD
 {
     public sealed class IndexedStorage<T> : IEnumerable<IndexedStorage<T>.Record>, ICollection<IndexedStorage<T>.Record>, IDisposable
     {
         private enum RecordType : byte
         {
-            Data,
-            Label
+            Data = 0,
+            Empty = 1
         }
 
         private static BinaryFormatter formatter = new BinaryFormatter();
@@ -22,7 +22,8 @@ namespace NiL.WBE.DataBase
         public sealed class Record
         {
             private IndexedStorage<T> owner;
-            private byte[] buf;
+            private long position;
+            private int size;
 
             public long Index { get; internal set; }
             private bool isValueValid;
@@ -32,47 +33,72 @@ namespace NiL.WBE.DataBase
                 get
                 {
                     if (!isValueValid)
-                    {
-                        owner.tempStream.Position = 0;
-                        owner.tempStream.Write(buf, 1 + buf[0], buf.Length - 1 - buf[0]);
-                        owner.tempStream.Position = 0;
-                        value = (T)formatter.Deserialize(owner.tempStream);
-                        isValueValid = true;
-                    }
+                        validateValue();
                     return value;
+                }
+                set
+                {
+                    if (Index != -1)
+                    {
+                        owner.tempStream.SetLength(0);
+                        formatter.Serialize(owner.tempStream, value);
+                        if (owner.tempStream.Length > size && Index != owner.count - 1)
+                        {
+                            owner.cindex.Position = 8 * Index;
+                            var oldPos = owner.readLong(owner.cindex);
+                            owner.data.Position = oldPos;
+                            owner.data.WriteByte((byte)RecordType.Empty);
+                            position = owner.data.Length;
+                            owner.cindex.Position = 8 * Index;
+                            owner.writeLong(owner.cindex, position);
+                            owner.data.Position = position;
+                            owner.writeData(Name);
+                            size = (int)owner.tempStream.Length;
+                            position += 4 + Encoding.Default.GetByteCount(name);
+                        }
+                        else
+                        {
+                            owner.data.Position = position;
+                            owner.data.Write(owner.tempStream.GetBuffer(), 0, size);
+                        }
+                    }
+                    isValueValid = true;
+                    this.value = value;
                 }
             }
             private string name;
             public string Name
             {
                 get { return name; }
-                private set
-                {
-                    if (value.Length > 255)
-                        throw new ArgumentException();
-                    name = value;
-                }
             }
 
-            internal Record(string name, IndexedStorage<T> owner, byte[] buf)
+            private void validateValue()
             {
-                this.Name = name;
+                owner.data.Position = position;
+                value = (T)formatter.Deserialize(owner.data);
+                isValueValid = true;
+            }
+
+            internal Record(string name, IndexedStorage<T> owner, long position, int size, long index)
+            {
+                if (name.Length > 255)
+                    throw new ArgumentException();
+                this.name = name;
                 this.owner = owner;
-                this.buf = buf;
+                this.position = position;
+                this.size = size;
+                this.Index = index;
             }
 
             public Record(string name, T value)
             {
+                if (name.Length > 255)
+                    throw new ArgumentException();
                 isValueValid = true;
                 this.value = value;
-                this.Name = name;
+                this.name = name;
+                Index = -1;
             }
-        }
-
-        public enum Direction
-        {
-            FromStartToEnd,
-            FromEndToStart
         }
 
         private readonly byte[] longBuf = new byte[8];
@@ -115,19 +141,30 @@ namespace NiL.WBE.DataBase
         private MemoryStream tempStream;
         private Stream data;
         private Stream cindex;
+        private Stream nameIndexDump;
+        private BinaryTree<long> nameIndex;
         private long count;
 
-        public Record this[int index]
+        public Record this[long index]
         {
             get
             {
                 if (index < 0 || index > count)
                     throw new ArgumentOutOfRangeException();
                 cindex.Position = 8 * index;
-                return readRecord(readLong(cindex));
+                return readRecord(readLong(cindex), index);
             }
         }
 
+        public Record this[string name]
+        {
+            get
+            {
+                return this[nameIndex[name]];
+            }
+        }
+
+        public bool IsDisposed { get; private set; }
         public bool IsSynchronized { get { return false; } }
         public object SyncRoot { get { return this; } }
         public bool IsReadOnly { get { return false; } }
@@ -142,11 +179,6 @@ namespace NiL.WBE.DataBase
         public long LongCount { get { return count; } }
 
         /// <summary>
-        /// Направление перебора элементов по-умолчанию.
-        /// </summary>
-        public Direction DefaultDirection { get; set; }
-
-        /// <summary>
         /// Создаёт коллекцию именованных элементов, используя для хранения указанный поток.
         /// </summary>
         /// <param name="dataBase">Поток, используемый для хранения элементов коллекции.</param>
@@ -156,9 +188,11 @@ namespace NiL.WBE.DataBase
                 throw new ArgumentNullException();
             if (!typeof(T).IsSerializable)
                 throw new ArgumentException(typeof(T) + " is not serializable.");
+            IsDisposed = false;
             tempStream = new MemoryStream(65535);
             this.data = new FileStream(directory + "/data.db", FileMode.OpenOrCreate, FileAccess.ReadWrite);
             this.cindex = new FileStream(directory + "/cindex.db", FileMode.OpenOrCreate, FileAccess.ReadWrite);
+            nameIndexDump = new FileStream(directory + "/nindex.db", FileMode.OpenOrCreate, FileAccess.ReadWrite);
             byte[] buf = new byte[4];
             if (data.Length != 0)
             {
@@ -169,111 +203,53 @@ namespace NiL.WBE.DataBase
                     && buf[2] == 0xA1
                     && buf[3] == 0xA0)
                 {
-                    data.Position = data.Length - 8 - 2 - 1;
-                    count = readLong(data);
-                    if (cindex.Length != count * 8)
-                        Reindex();
+                    count = cindex.Length / 8;
+                    nameIndex = (BinaryTree<long>)formatter.Deserialize(nameIndexDump);
                     return;
                 }
             }
             Clear();
         }
 
+        ~IndexedStorage()
+        {
+            Dispose();
+        }
+
         public void Dispose()
         {
-            data.Close();
-            tempStream.Close();
-            data.Dispose();
-            tempStream.Dispose();
-        }
-
-        public void Reindex()
-        {
-            cindex.Position = 0;
-            foreach (var r in this)
-                writeLong(cindex, data.Position);
-        }
-
-        public IEnumerable<Record> Select(string name)
-        {
-            foreach(var rec in this)
+            if (!IsDisposed)
             {
-                if (rec.Name == name)
-                    yield return rec;
+                data.Close();
+                tempStream.Close();
+                data.Dispose();
+                tempStream.Dispose();
+                nameIndexDump.Position = 0;
+                formatter.Serialize(nameIndexDump, nameIndex);
+                nameIndexDump.Close();
+                IsDisposed = true;
             }
         }
 
-        private Record readRecord(long position)
-        {
-            var t = position;
-            return readRecord(ref t);
-        }
-
-        private Record readRecord(ref long position)
+        private Record readRecord(long position, long index)
         {
             data.Position = position;
-            data.Read(longBuf, 0, 3);
+            data.Read(longBuf, 0, 4);
             RecordType rt = (RecordType)longBuf[0];
-            var size = longBuf[1] + longBuf[2] * 256;
-            position += size + 8 + 2 + 2 + 1 + 1;
+            var size = longBuf[2] + longBuf[3] * 256;
+            position += size + longBuf[1] + 4 + 8 + 1;
             if (rt != RecordType.Data)
                 return null;
-            byte[] buf = new byte[size];
-            data.Read(buf, 0, size);
-            var nlen = buf[0];
-            string name = Encoding.Default.GetString(buf, 1, nlen);
-            return new Record(name, this, buf)
-            {
-                Index = readLong(data) - 1
-            };
+            byte[] buf = tempStream.GetBuffer();
+            data.Read(buf, 0, longBuf[1]);
+            string name = Encoding.Default.GetString(buf, 0, longBuf[1]);
+            return new Record(name, this, data.Position, size, index);
         }
 
         public IEnumerator<IndexedStorage<T>.Record> GetEnumerator()
         {
-            switch (DefaultDirection)
-            {
-                case Direction.FromStartToEnd:
-                    {
-                        long pos = 14;
-                        data.Position = pos;
-                        for (; data.Position < data.Length; )
-                        {
-                            var res = readRecord(ref pos);
-                            if (res == null)
-                                continue;
-                            yield return res;
-                        }
-                        break;
-                    }
-                case Direction.FromEndToStart:
-                    {
-                        long pos = data.Length;
-                        for (; ; )
-                        {
-                            data.Position = pos - 2 - 1;
-                            data.Read(longBuf, 0, 3);
-                            var size = longBuf[0] + longBuf[1] * 256;
-                            if (size == 0)
-                                break;
-                            pos -= size + 8 + 2 + 2 + 1 + 1;
-                            RecordType rt = (RecordType)longBuf[2];
-                            if (rt != RecordType.Data)
-                                continue;
-                            data.Position = pos + 2 + 1;
-                            byte[] buf = new byte[size];
-                            data.Read(buf, 0, size);
-                            var nlen = buf[0];
-                            string name = Encoding.Default.GetString(buf, 1, nlen);
-                            yield return new Record(name, this, buf)
-                            {
-                                Index = readLong(data) - 1
-                            };
-                        }
-                        break;
-                    }
-                default:
-                    throw new ArgumentException();
-            }
+            for (int i = 0; i < count; i++)
+                yield return this[i];
         }
 
         IEnumerator IEnumerable.GetEnumerator()
@@ -310,27 +286,39 @@ namespace NiL.WBE.DataBase
         }
 
         /// <summary>
+        /// Записывает в текующую позицию data структуру со значением, сериализованным в tempStream и указанным именем.
+        /// </summary>
+        /// <param name="name">Имя записываемой структуры.</param>
+        private void writeData(string name)
+        {
+            byte[] nameBuf = Encoding.Default.GetBytes(name);
+            data.WriteByte((byte)RecordType.Data);
+            data.WriteByte((byte)nameBuf.Length);
+            writeUShort(data, (ushort)tempStream.Length);
+            data.Write(nameBuf, 0, nameBuf.Length);
+            data.Write(tempStream.GetBuffer(), 0, (int)tempStream.Length);
+        }
+
+        /// <summary>
         /// Добавляет запись в конец файла.
         /// </summary>
         /// <param name="item">Запись, которую следует добавить.</param>
         public void Add(IndexedStorage<T>.Record item)
         {
-            data.Position = data.Length;
-            byte[] name = Encoding.Default.GetBytes(item.Name);
+            if (nameIndex.ContainsKey(item.Name))
+                throw new ArgumentException();
             tempStream.SetLength(0);
             formatter.Serialize(tempStream, item.Value);
-            if (name.Length + tempStream.Length > 65534)
+            if (tempStream.Length > 65535)
                 throw new ArgumentException("Data too learge");
-            writeLong(cindex, data.Position);
-            data.WriteByte((byte)RecordType.Data);
-            writeUShort(data, (ushort)(name.Length + tempStream.Length + 1));
-            data.WriteByte((byte)name.Length);
-            data.Write(name, 0, name.Length);
-            data.Write(tempStream.GetBuffer(), 0, (int)tempStream.Length);
-            writeLong(data, ++count);
-            writeUShort(data, (ushort)(name.Length + tempStream.Length + 1));
-            data.WriteByte((byte)RecordType.Data);
-            tempStream.SetLength(0);
+            var pos = data.Length;
+            data.Position = pos;
+            writeData(item.Name);
+            cindex.Position = cindex.Length;
+            writeLong(cindex, pos);
+            item.Index = cindex.Length / 8 - 1;
+            count++;
+            nameIndex.Add(item.Name, item.Index);
         }
 
         public void Clear()
@@ -343,11 +331,8 @@ namespace NiL.WBE.DataBase
             buf[2] = 0xA1;
             buf[3] = 0xA0;
             data.Write(buf, 0, 4);
-            buf[0] = buf[1] = buf[2] = buf[3] = 0;
-            data.Write(buf, 0, 4);
-            data.Write(buf, 0, 4);
-            data.Write(buf, 0, 2);
             cindex.SetLength(0);
+            nameIndex = new BinaryTree<long>();
         }
 
         /// <summary>

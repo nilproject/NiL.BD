@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -37,17 +38,25 @@ namespace NiL.BD
 
             public bool Contains(T item)
             {
-                throw new NotImplementedException();
+                foreach (var i in owner)
+                {
+                    if (i.Value.Equals(item))
+                        return true;
+                }
+                return false;
             }
 
             public void CopyTo(T[] array, int arrayIndex)
             {
-                throw new NotImplementedException();
+                if (array.Length - arrayIndex < owner.Count)
+                    throw new ArgumentOutOfRangeException();
+                foreach (var i in owner)
+                    array[arrayIndex++] = i.Value;
             }
 
             public bool Remove(T item)
             {
-                throw new NotImplementedException();
+                throw new NotSupportedException();
             }
 
             public IEnumerator<T> GetEnumerator()
@@ -88,17 +97,20 @@ namespace NiL.BD
 
             public bool Contains(string item)
             {
-                throw new NotImplementedException();
+                return owner.ContainsKey(item);
             }
 
             public void CopyTo(string[] array, int arrayIndex)
             {
-                throw new NotImplementedException();
+                if (array.Length - arrayIndex < owner.Count)
+                    throw new ArgumentOutOfRangeException();
+                foreach (var i in owner)
+                    array[arrayIndex++] = i.Key;
             }
 
             public bool Remove(string item)
             {
-                throw new NotImplementedException();
+                throw new NotSupportedException();
             }
 
             public IEnumerator<string> GetEnumerator()
@@ -121,31 +133,34 @@ namespace NiL.BD
             public string key = null;
             public T value = default(T);
             public Node less = null;
-            public Node more = null;
+            public Node greater = null;
             public int height;
 
             private void rotateLtM(ref Node _this)
             {
-                var temp = less.more;
-                less.more = _this;
+                var temp = less.greater;
+                less.greater = _this;
                 _this = less;
                 less = temp;
             }
 
             private void rotateMtL(ref Node _this)
             {
-                var temp = more.less;
-                more.less = _this;
-                _this = more;
-                more = temp;
+                var temp = greater.less;
+                greater.less = _this;
+                _this = greater;
+                greater = temp;
+            }
+
+            private void validateHeight()
+            {
+                height = Math.Max(less != null ? less.height : 0, greater != null ? greater.height : 0) + 1;
             }
 
             public void Balance(ref Node _this)
             {
-                if (height != 0)
-                    return;
                 int lessH = 0;
-                int moreH = 0;
+                int greaterH = 0;
                 if (less != null)
                 {
                     lessH = less.height;
@@ -155,33 +170,46 @@ namespace NiL.BD
                         lessH = less.height;
                     }
                 }
-                if (more != null)
+                if (greater != null)
                 {
-                    moreH = more.height;
-                    if (moreH == 0)
+                    greaterH = greater.height;
+                    if (greaterH == 0)
                     {
-                        more.Balance(ref more);
-                        moreH = more.height;
+                        greater.Balance(ref greater);
+                        greaterH = greater.height;
                     }
                 }
-                int delta = lessH - moreH;
+                int delta = lessH - greaterH;
                 if (delta > 1)
                 {
                     int llessH = less.less != null ? less.less.height : 0;
-                    int lmoreH = less.more != null ? less.more.height : 0;
-                    if (llessH < lmoreH)
+                    int lgreaterH = less.greater != null ? less.greater.height : 0;
+                    if (llessH < lgreaterH)
+                    {
                         less.rotateMtL(ref less);
+                        less.less.validateHeight();
+                        less.validateHeight();
+                    }
                     _this.rotateLtM(ref _this);
+                    validateHeight();
+                    _this.validateHeight();
                 }
                 else if (delta < -1)
                 {
-                    int mlessH = more.less != null ? more.less.height : 0;
-                    int mmoreH = more.more != null ? more.more.height : 0;
-                    if (mlessH > mmoreH)
-                        less.rotateLtM(ref less);
+                    int mlessH = greater.less != null ? greater.less.height : 0;
+                    int ggreaterH = greater.greater != null ? greater.greater.height : 0;
+                    if (mlessH > ggreaterH)
+                    {
+                        greater.rotateLtM(ref greater);
+                        greater.greater.validateHeight();
+                        greater.validateHeight();
+                    }
                     _this.rotateMtL(ref _this);
+                    validateHeight();
+                    _this.validateHeight();
                 }
-                height = Math.Max(less != null ? less.height : 0, more != null ? more.height : 0) + 1;
+                else
+                    height = Math.Max(less != null ? less.height : 0, greater != null ? greater.height : 0) + 1;
             }
 
             public override string ToString()
@@ -210,8 +238,6 @@ namespace NiL.BD
 
         public BinaryTree()
         {
-            if (!typeof(T).IsSerializable)
-                throw new ArgumentException();
             root = null;
             Count = 0;
         }
@@ -249,9 +275,9 @@ namespace NiL.BD
                         }
                         else if (cmp > 0)
                         {
-                            if (c.more == null)
+                            if (c.greater == null)
                             {
-                                c.more = new Node() { key = key, value = value };
+                                c.greater = new Node() { key = key, value = value };
                                 c.height = 0;
                                 while (stack.Count != 0)
                                     stack.Pop().height = 0;
@@ -260,7 +286,7 @@ namespace NiL.BD
                                 return;
                             }
                             stack.Push(c);
-                            c = c.more;
+                            c = c.greater;
                         }
                         else if (cmp < 0)
                         {
@@ -314,9 +340,9 @@ namespace NiL.BD
                         throw new ArgumentException();
                     else if (cmp > 0)
                     {
-                        if (c.more == null)
+                        if (c.greater == null)
                         {
-                            c.more = new Node() { key = key, value = value };
+                            c.greater = new Node() { key = key, value = value };
                             c.height = 0;
                             while (stack.Count != 0)
                                 stack.Pop().height = 0;
@@ -325,7 +351,7 @@ namespace NiL.BD
                             return;
                         }
                         stack.Push(c);
-                        c = c.more;
+                        c = c.greater;
                     }
                     else if (cmp < 0)
                     {
@@ -347,17 +373,20 @@ namespace NiL.BD
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetValue(string key, out T value)
         {
-            value = default(T);
             if (root == null)
+            {
+                value = default(T);
                 return false;
+            }
             else
             {
                 var c = root;
                 do
                 {
-                    var cmp = string.Compare(key, c.key, StringComparison.Ordinal);
+                    var cmp = string.CompareOrdinal(key, c.key);
                     if (cmp == 0)
                     {
                         value = c.value;
@@ -365,14 +394,20 @@ namespace NiL.BD
                     }
                     else if (cmp > 0)
                     {
-                        if (c.more == null)
+                        if (c.greater == null)
+                        {
+                            value = default(T);
                             return false;
-                        c = c.more;
+                        }
+                        c = c.greater;
                     }
-                    else if (cmp < 0)
+                    else
                     {
                         if (c.less == null)
+                        {
+                            value = default(T);
                             return false;
+                        }
                         c = c.less;
                     }
                 }
@@ -437,9 +472,9 @@ namespace NiL.BD
                         step[sindex] = 2;
                         yield return new KeyValuePair<string, T>(stack[sindex].key, stack[sindex].value);
                     }
-                    if (step[sindex] < 3 && stack[sindex].more != null)
+                    if (step[sindex] < 3 && stack[sindex].greater != null)
                     {
-                        stack[sindex + 1] = stack[sindex].more;
+                        stack[sindex + 1] = stack[sindex].greater;
                         step[sindex] = 3;
                         sindex++;
                         step[sindex] = 0;

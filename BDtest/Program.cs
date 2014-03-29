@@ -1,5 +1,4 @@
 ﻿using NiL.BD;
-using NiL.WBE.DataBase;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -13,35 +12,128 @@ namespace BDtest
 {
     class Program
     {
-        static void Main(string[] args)
+        private static void benchmark3()
+        {
+            GC.Collect();
+            var tree = new System.Collections.Specialized.StringDictionary();
+            tree["0"] = "0";
+            tree.Clear();
+            var sw = new Stopwatch();
+            sw.Start();
+            for (int i = 0; i < 10000000; i++)
+            {
+                var temp = i.ToString();
+                tree[temp] = temp;
+            }
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+            GC.GetTotalMemory(true);
+            sw.Restart();
+            foreach (var t in tree)
+            {
+
+            }
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+            GC.GetTotalMemory(true);
+            sw.Restart();
+            var test = tree["12345"];
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+        }
+
+        private static void benchmark2()
+        {
+            GC.Collect();
+            var tree = new Dictionary<string, int>();
+            tree["0"] = 0;
+            tree.Clear();
+            var sw = new Stopwatch();
+            sw.Start();
+            for (int i = 0; i < 10000000; i++)
+                tree[i.ToString()] = i;
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+            GC.GetTotalMemory(true);
+            sw.Restart();
+            foreach (var t in tree)
+            {
+
+            }
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+            GC.GetTotalMemory(true);
+            sw.Restart();
+            var test = tree["12345"];
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+        }
+
+        private static void benchmark()
+        {
+            GC.Collect();
+            var tree = new BinaryTree<int>();
+            tree["0"] = 0;
+            tree.Clear();
+            var sw = new Stopwatch();
+            sw.Start();
+            for (int i = 0; i < 10000000; i++)
+                tree[i.ToString()] = i;
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+            GC.GetTotalMemory(true);
+            sw.Restart();
+            foreach(var t in tree)
+            {
+
+            }
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+            var test = tree["12345"];
+            GC.GetTotalMemory(true);
+            sw.Restart();
+            test = tree["12345"];
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+        }
+
+        private static void benchmarkStringComparision()
         {
             var sw = new Stopwatch();
-            sw.Start();
-            var tree = new BinaryTree<int>();
+            sw.Restart();
             for (int i = 0; i < 10000000; i++)
-                tree[i.ToString("0000000")] = i;
+                string.CompareOrdinal("1234567890", "1234567890");
             sw.Stop();
             Console.WriteLine(sw.Elapsed);
-            /*foreach (var t in tree)
-            {
-                Console.WriteLine(t.Key + " " + t.Value);
-            }*/
-            /*
-            string dirname = "I:/Users/Дмитрий/Documents/testdb";
-            foreach (var file in Directory.EnumerateFiles(dirname))
-                File.Delete(file);
+        }
+
+        static void Main(string[] args)
+        {
+            benchmark3();
+            benchmark();
+            return;
+
+            string dirname = "F:/Users/Дмитрий/Documents/testdb";
+            if (Directory.Exists(dirname))
+                foreach (var file in Directory.EnumerateFiles(dirname))
+                    File.Delete(file);
             Directory.CreateDirectory(dirname);
-            var bdata = new IndexedStorage<string>(dirname);
-            var r = new Random(Environment.TickCount);
-            for (int i = 0; i < 1000; i++)
-                bdata.Add(new IndexedStorage<string>.Record(r.Next(65535).ToString("x2"), "Stres test"));
-            var sw = new Stopwatch();
-            sw.Start();
-            Console.WriteLine(bdata.Select("fefe").Count());
-            sw.Stop();
-            Console.WriteLine(sw.Elapsed);
-            bdata.Dispose();
-            */
+            using (var bdata = new IndexedStorage<string>(dirname))
+            {
+                var sw = new Stopwatch();
+                sw.Start();
+                for (int i = 0; i < 100000; i++)
+                {
+                    var t = i.ToString();
+                    bdata.Add(new IndexedStorage<string>.Record(t, t));
+                }
+                sw.Stop();
+                Console.WriteLine(sw.Elapsed);
+                sw.Restart();
+                var test = bdata["19263"].Value;
+                sw.Stop();
+                Console.WriteLine(sw.Elapsed);
+            }
         }
     }
 }
