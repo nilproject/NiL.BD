@@ -429,7 +429,96 @@ namespace NiL.BD
 
         public bool Remove(string key)
         {
-            throw new NotImplementedException();
+            Node prev = null;
+            var c = root;
+            var stack = new Stack<Node>();
+            do
+            {
+                var cmp = string.CompareOrdinal(key, c.key);
+                if (cmp == 0)
+                {
+                    if (c.greater == null)
+                    {
+                        if (prev == null)
+                            root = c.less;
+                        else
+                        {
+                            if (prev.greater == c)
+                                prev.greater = c.less;
+                            else
+                                prev.less = c.less;
+                        }
+                    }
+                    else if (c.less == null)
+                    {
+                        if (prev == null)
+                            root = c.greater;
+                        else
+                        {
+                            if (prev.greater == c)
+                                prev.greater = c.greater;
+                            else
+                                prev.less = c.greater;
+                        }
+                    }
+                    else
+                    {
+                        var caret = c.less;
+                        if (caret.greater != null)
+                        {
+                            caret.height = 0;
+                            var pcaret = c;
+                            while (caret.greater != null)
+                            {
+                                pcaret = caret;
+                                caret = caret.greater;
+                                caret.height = 0;
+                            }
+                            pcaret.greater = caret.less;
+                            caret.greater = c.greater;
+                            caret.less = c.less;
+                            if (prev == null)
+                                root = caret;
+                            else if (prev.greater == c)
+                                prev.greater = caret;
+                            else
+                                prev.less = caret;
+                        }
+                        else
+                        {
+                            caret.height = 0;
+                            caret.greater = c.greater;
+                            if (prev == null)
+                                root = caret;
+                            else if (prev.greater == c)
+                                prev.greater = caret;
+                            else
+                                prev.less = caret;
+                        }
+                    }
+                    while (stack.Count > 0)
+                        stack.Pop().height = 0;
+                    root.Balance(ref root);
+                    return true;
+                }
+                else if (cmp > 0)
+                {
+                    if (c.greater == null)
+                        return false;
+                    prev = c;
+                    stack.Push(c);
+                    c = c.greater;
+                }
+                else
+                {
+                    if (c.less == null)
+                        return false;
+                    prev = c;
+                    stack.Push(c);
+                    c = c.less;
+                }
+            }
+            while (true);
         }
 
         public bool Remove(KeyValuePair<string, T> keyValuePair)

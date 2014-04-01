@@ -12,6 +12,36 @@ namespace BDtest
 {
     class Program
     {
+        private static void benchmark4()
+        {
+            GC.Collect();
+            var tree = new SortedDictionary<string, int>();
+            tree["0"] = 0;
+            tree.Clear();
+            var sw = new Stopwatch();
+            sw.Start();
+            for (int i = 0; i < 10000000; i++)
+            {
+                var temp = i.ToString();
+                tree[temp] = i;
+            }
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+            GC.GetTotalMemory(true);
+            sw.Restart();
+            foreach (var t in tree)
+            {
+
+            }
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+            GC.GetTotalMemory(true);
+            sw.Restart();
+            var test = tree["12345"];
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+        }
+
         private static void benchmark3()
         {
             GC.Collect();
@@ -107,12 +137,8 @@ namespace BDtest
             Console.WriteLine(sw.Elapsed);
         }
 
-        static void Main(string[] args)
+        private static void indexedStorageTest()
         {
-            benchmark3();
-            benchmark();
-            return;
-
             string dirname = "F:/Users/Дмитрий/Documents/testdb";
             if (Directory.Exists(dirname))
                 foreach (var file in Directory.EnumerateFiles(dirname))
@@ -134,6 +160,14 @@ namespace BDtest
                 sw.Stop();
                 Console.WriteLine(sw.Elapsed);
             }
+        }
+
+        static void Main(string[] args)
+        {
+            var bt = new BinaryTree<int>();
+            for (int i = 0; i < 6; i++)
+                bt.Add((9 - i).ToString(), i);
+            bt.Remove("5");
         }
     }
 }
