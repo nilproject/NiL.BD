@@ -12,6 +12,43 @@ namespace BDtest
 {
     class Program
     {
+        /// <summary>
+        /// IndexedDictionary
+        /// </summary>
+        private static void benchmark5()
+        {
+            GC.Collect();
+            var tree = new IndexedDictionary<int, int>();
+            tree[default(int)] = 0;
+            tree.Clear();
+            var keys = new int[10000000];
+            for (int i = 0; i < 10000000; i++)
+                keys[i] = i;
+            var sw = new Stopwatch();
+            sw.Start();
+            for (int i = 0; i < keys.Length; i++)
+                tree[keys[i]] = i;
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+            GC.GetTotalMemory(true);
+            sw.Restart();
+            foreach (var t in tree)
+            {
+
+            }
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+            GC.GetTotalMemory(true);
+            sw.Restart();
+            for (int i = 0; i < keys.Length; i++)
+            {
+                if (!tree.ContainsKey(keys[i]))
+                    throw new Exception();
+            }
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+        }
+
         private static void benchmark4()
         {
             GC.Collect();
@@ -72,16 +109,22 @@ namespace BDtest
             Console.WriteLine(sw.Elapsed);
         }
 
+        /// <summary>
+        /// Dictionary
+        /// </summary>
         private static void benchmark2()
         {
             GC.Collect();
-            var tree = new Dictionary<string, int>();
-            tree["0"] = 0;
+            var tree = new Dictionary<int, int>();
+            tree[default(int)] = 0;
             tree.Clear();
+            var keys = new int[10000000];
+            for (int i = 0; i < 10000000; i++)
+                keys[i] = i;
             var sw = new Stopwatch();
             sw.Start();
             for (int i = 0; i < 10000000; i++)
-                tree[i.ToString()] = i;
+                tree[keys[i]] = i;
             sw.Stop();
             Console.WriteLine(sw.Elapsed);
             GC.GetTotalMemory(true);
@@ -94,35 +137,48 @@ namespace BDtest
             Console.WriteLine(sw.Elapsed);
             GC.GetTotalMemory(true);
             sw.Restart();
-            var test = tree["12345"];
+            for (int i = 0; i < 10000000; i++)
+            {
+                if (!tree.ContainsKey(keys[i]))
+                    throw new Exception();
+            }
             sw.Stop();
             Console.WriteLine(sw.Elapsed);
         }
 
+        /// <summary>
+        /// BinaryTree
+        /// </summary>
         private static void benchmark()
         {
             GC.Collect();
-            var tree = new BinaryTree<int>();
+            var tree = new BinaryTree<string, int>();
             tree["0"] = 0;
             tree.Clear();
+            string[] keys = new string[10000000];
+            for (int i = 0; i < 10000000; i++)
+                keys[i] = i.ToString();
             var sw = new Stopwatch();
             sw.Start();
             for (int i = 0; i < 10000000; i++)
-                tree[i.ToString()] = i;
+                tree[keys[i]] = i;
             sw.Stop();
             Console.WriteLine(sw.Elapsed);
             GC.GetTotalMemory(true);
             sw.Restart();
-            foreach(var t in tree)
+            foreach (var t in tree)
             {
 
             }
             sw.Stop();
             Console.WriteLine(sw.Elapsed);
-            var test = tree["12345"];
             GC.GetTotalMemory(true);
             sw.Restart();
-            test = tree["12345"];
+            for (int i = 0; i < 10000000; i++)
+            {
+                if (!tree.ContainsKey(keys[i]))
+                    throw new Exception();
+            }
             sw.Stop();
             Console.WriteLine(sw.Elapsed);
         }
@@ -139,35 +195,126 @@ namespace BDtest
 
         private static void indexedStorageTest()
         {
-            string dirname = "F:/Users/Дмитрий/Documents/testdb";
-            if (Directory.Exists(dirname))
-                foreach (var file in Directory.EnumerateFiles(dirname))
-                    File.Delete(file);
-            Directory.CreateDirectory(dirname);
-            using (var bdata = new IndexedStorage<string>(dirname))
+            //string dirname = "F:/Users/Дмитрий/Documents/testdb";
+            //if (Directory.Exists(dirname))
+            //    foreach (var file in Directory.EnumerateFiles(dirname))
+            //        File.Delete(file);
+            //Directory.CreateDirectory(dirname);
+            //using (var bdata = new IndexedStorage<string>(dirname))
+            //{
+            //    var sw = new Stopwatch();
+            //    sw.Start();
+            //    for (int i = 0; i < 100000; i++)
+            //    {
+            //        var t = i.ToString();
+            //        bdata.Add(t, t);
+            //    }
+            //    sw.Stop();
+            //    Console.WriteLine(sw.Elapsed);
+            //    sw.Restart();
+            //    var test = bdata["19263"].Value;
+            //    sw.Stop();
+            //    Console.WriteLine(sw.Elapsed);
+            //}
+        }
+
+        [Serializable]
+        private struct DbItem
+        {
+            public int key;
+            public string value;
+        }
+
+        static int isqrt(int n)
+        {
+            n = n * (1 - 2 * (n >> (sizeof(int) * 8 - 1)));
+            if (n < 2)
+                return n;
+            var r = 0;
+            var d = 1 << 3;
+            while (d != 0)
             {
-                var sw = new Stopwatch();
-                sw.Start();
-                for (int i = 0; i < 100000; i++)
+                do
                 {
-                    var t = i.ToString();
-                    bdata.Add(new IndexedStorage<string>.Record(t, t));
+                    r += d;
                 }
-                sw.Stop();
-                Console.WriteLine(sw.Elapsed);
-                sw.Restart();
-                var test = bdata["19263"].Value;
-                sw.Stop();
-                Console.WriteLine(sw.Elapsed);
+                while (r * r < n);
+                r -= d;
+                d >>= 1;
             }
+            return r;
+        }
+
+        private static int getPrime(int min)
+        {
+            for (var i = min | 1; i < int.MaxValue; i += 2)
+            {
+                var j = isqrt(i);
+                for (; j >= 3; j -= 2)
+                {
+                    if (i % j == 0)
+                        break;
+                }
+                if (j == 1)
+                    return i;
+            }
+            return 2;
+        }
+
+        private static int isPrime(int x)
+        {
+            for (var i = isqrt(x) | 1; i > 2; i -= 2)
+                if (x % i == 0)
+                    return 0;
+            return x & 1;
         }
 
         static void Main(string[] args)
         {
-            var bt = new BinaryTree<int>();
-            for (int i = 0; i < 6; i++)
-                bt.Add((9 - i).ToString(), i);
-            bt.Remove("5");
+            //benchmark();
+            //benchmark2();
+            //benchmark5();
+            var id = new IndexedDictionary<int, int>();
+            var index = 0;
+            for (; index < 100; index++)
+            {
+                id.Add(index
+                    //* 137 % 10000
+                    , isPrime(index));
+            }
+            foreach (var i in id)
+            {
+                index--;
+                Console.WriteLine(index + " " + i + " " + isPrime(index));
+            }
+        }
+
+        static void Main_(string[] args)
+        {
+            string dirname = "J:/Users/Дмитрий/Documents/testdb";
+            if (Directory.Exists(dirname))
+                foreach (var file in Directory.EnumerateFiles(dirname))
+                    File.Delete(file);
+            Directory.CreateDirectory(dirname);
+            using (var bdata = new NamedStorage<string>(dirname))
+            {
+                var sw = new Stopwatch();
+                sw.Start();
+                for (int i = 1000000; i-- > 0; )
+                {
+                    var t = i.ToString();
+                    bdata.Add(t, t);
+                }
+                sw.Stop();
+                Console.WriteLine(sw.Elapsed);
+                sw.Restart();
+                foreach (var o in bdata)
+                {
+                    Console.WriteLine(o.Value);
+                }
+                sw.Stop();
+                Console.WriteLine(sw.Elapsed);
+            }
         }
     }
 }

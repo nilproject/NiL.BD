@@ -1,10 +1,8 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
+using System.Runtime.Serialization;
 
 namespace NiL.BD
 {
@@ -12,13 +10,13 @@ namespace NiL.BD
     /// Предоставляет реализацию бинарного дерева поиска со строковым аргументом.
     /// </summary>
     [Serializable]
-    public class BinaryTree<T> : IDictionary<string, T>
+    public class BinaryTree<TKey, TValue> : IDictionary<TKey, TValue>, ISerializable where TKey : IComparable<TKey>
     {
-        private sealed class _Values : ICollection<T>
+        private sealed class _Values : ICollection<TValue>
         {
-            private BinaryTree<T> owner;
+            private BinaryTree<TKey, TValue> owner;
 
-            public _Values(BinaryTree<T> owner)
+            public _Values(BinaryTree<TKey, TValue> owner)
             {
                 this.owner = owner;
             }
@@ -26,7 +24,7 @@ namespace NiL.BD
             public int Count { get { return owner.Count; } }
             public bool IsReadOnly { get { return true; } }
 
-            public void Add(T item)
+            public void Add(TValue item)
             {
                 throw new NotSupportedException();
             }
@@ -36,7 +34,7 @@ namespace NiL.BD
                 throw new NotSupportedException();
             }
 
-            public bool Contains(T item)
+            public bool Contains(TValue item)
             {
                 foreach (var i in owner)
                 {
@@ -46,20 +44,24 @@ namespace NiL.BD
                 return false;
             }
 
-            public void CopyTo(T[] array, int arrayIndex)
+            public void CopyTo(TValue[] array, int arrayIndex)
             {
+                if (array == null)
+                    throw new ArgumentNullException("array");
+                if (arrayIndex < 0)
+                    throw new ArgumentOutOfRangeException("arrayIndex");
                 if (array.Length - arrayIndex < owner.Count)
-                    throw new ArgumentOutOfRangeException();
+                    throw new ArgumentOutOfRangeException("arrayIndex");
                 foreach (var i in owner)
                     array[arrayIndex++] = i.Value;
             }
 
-            public bool Remove(T item)
+            public bool Remove(TValue item)
             {
                 throw new NotSupportedException();
             }
 
-            public IEnumerator<T> GetEnumerator()
+            public IEnumerator<TValue> GetEnumerator()
             {
                 foreach (var kvp in owner)
                 {
@@ -69,15 +71,15 @@ namespace NiL.BD
 
             IEnumerator IEnumerable.GetEnumerator()
             {
-                return (this as IEnumerable<T>).GetEnumerator();
+                return (this as IEnumerable<TValue>).GetEnumerator();
             }
         }
 
-        private sealed class _Keys : ICollection<string>
+        private sealed class _Keys : ICollection<TKey>
         {
-            private BinaryTree<T> owner;
+            private BinaryTree<TKey, TValue> owner;
 
-            public _Keys(BinaryTree<T> owner)
+            public _Keys(BinaryTree<TKey, TValue> owner)
             {
                 this.owner = owner;
             }
@@ -85,7 +87,7 @@ namespace NiL.BD
             public int Count { get { return owner.Count; } }
             public bool IsReadOnly { get { return true; } }
 
-            public void Add(string item)
+            public void Add(TKey item)
             {
                 throw new NotSupportedException();
             }
@@ -95,25 +97,29 @@ namespace NiL.BD
                 throw new NotSupportedException();
             }
 
-            public bool Contains(string item)
+            public bool Contains(TKey item)
             {
                 return owner.ContainsKey(item);
             }
 
-            public void CopyTo(string[] array, int arrayIndex)
+            public void CopyTo(TKey[] array, int arrayIndex)
             {
+                if (array == null)
+                    throw new ArgumentNullException("array");
+                if (arrayIndex < 0)
+                    throw new ArgumentOutOfRangeException("arrayIndex");
                 if (array.Length - arrayIndex < owner.Count)
-                    throw new ArgumentOutOfRangeException();
+                    throw new ArgumentOutOfRangeException("arrayIndex");
                 foreach (var i in owner)
                     array[arrayIndex++] = i.Key;
             }
 
-            public bool Remove(string item)
+            public bool Remove(TKey item)
             {
                 throw new NotSupportedException();
             }
 
-            public IEnumerator<string> GetEnumerator()
+            public IEnumerator<TKey> GetEnumerator()
             {
                 foreach (var kvp in owner)
                 {
@@ -123,15 +129,15 @@ namespace NiL.BD
 
             IEnumerator IEnumerable.GetEnumerator()
             {
-                return (this as IEnumerable<string>).GetEnumerator();
+                return (this as IEnumerable<TKey>).GetEnumerator();
             }
         }
 
         [Serializable]
-        private sealed class Node
+        internal sealed class Node
         {
-            public string key = null;
-            public T value = default(T);
+            public TKey key;
+            public TValue value = default(TValue);
             public Node less = null;
             public Node greater = null;
             public int height;
@@ -223,55 +229,179 @@ namespace NiL.BD
             }
         }
 
+        private IComparer<TKey> comparer;
+        [NonSerialized]
+        private long state = 0;
         [NonSerialized]
         private Stack<Node> stack = new Stack<Node>();
-        public int Height { get { return root.height; } }
+        public int Height { get { return root == null ? 0 : root.height; } }
         public int Count { get; private set; }
         public bool IsReadOnly { get { return false; } }
         [NonSerialized]
-        private ICollection<string> keys;
-        public ICollection<string> Keys { get { return keys ?? (keys = new _Keys(this)); } }
+        private ICollection<TKey> keys;
+        public ICollection<TKey> Keys { get { return keys ?? (keys = new _Keys(this)); } }
         [NonSerialized]
-        private ICollection<T> values;
-        public ICollection<T> Values { get { return values ?? (values = new _Values(this)); } }
+        private ICollection<TValue> values;
+        public ICollection<TValue> Values { get { return values ?? (values = new _Values(this)); } }
         private Node root;
+        internal Node Root { get { return root; } }
 
         public BinaryTree()
         {
+            if (!typeof(IComparable).IsAssignableFrom(typeof(TKey))
+               && !typeof(IComparable<TKey>).IsAssignableFrom(typeof(TKey)))
+                throw new ArgumentException("Compaper not defined.");
             root = null;
             Count = 0;
+            state = DateTime.UtcNow.Ticks;
         }
 
-        public T this[string key]
+        public BinaryTree(IComparer<TKey> comparer)
+        {
+            root = null;
+            Count = 0;
+            state = DateTime.UtcNow.Ticks;
+            this.comparer = comparer;
+        }
+
+        protected BinaryTree(SerializationInfo info, StreamingContext context)
+        {
+            root = info.GetValue("root", typeof(Node)) as Node;
+            comparer = info.GetValue("comparer", typeof(IComparer<TKey>)) as IComparer<TKey>;
+            Count = info.GetInt32("count");
+            stack = new Stack<Node>();
+            Node[] nodes = new Node[Count];
+            for (var e = enumerate(root); e.MoveNext(); )
+                nodes[--Count] = e.Current;
+            root = null;
+            for (var i = 0; i < nodes.Length; i++)
+                Insert(nodes[i].key, nodes[i].value, false);
+        }
+
+        void ISerializable.GetObjectData(SerializationInfo info, StreamingContext context)
+        {
+            info.AddValue("root", root);
+            info.AddValue("count", Count);
+            info.AddValue("comparer", comparer);
+        }
+
+        public TValue this[TKey key]
         {
             get
             {
                 if (key == null)
-                    throw new ArgumentNullException();
-                T res;
+                    throw new ArgumentNullException("key");
+                TValue res;
                 if (!TryGetValue(key, out res))
                     throw new ArgumentException("Key not found.");
                 return res;
             }
             set
             {
+                lock (this)
+                {
+                    if (key == null)
+                        throw new ArgumentNullException("key");
+                    if (root == null)
+                    {
+                        root = new Node() { value = value, key = key };
+                        Count++;
+                        state = state ^ state << 1;
+                    }
+                    else
+                    {
+                        var c = root;
+                        stack.Clear();
+                        do
+                        {
+                            var cmp = comparer != null ? comparer.Compare(key, c.key) : key.CompareTo(c.key);
+                            if (cmp == 0)
+                            {
+                                c.value = value;
+                                return;
+                            }
+                            else if (cmp > 0)
+                            {
+                                if (c.greater == null)
+                                {
+                                    c.greater = new Node() { key = key, value = value };
+                                    c.height = 0;
+                                    while (stack.Count != 0)
+                                        stack.Pop().height = 0;
+                                    root.Balance(ref root);
+                                    Count++;
+                                    state = state ^ state << 1;
+                                    return;
+                                }
+                                stack.Push(c);
+                                c = c.greater;
+                            }
+                            else if (cmp < 0)
+                            {
+                                if (c.less == null)
+                                {
+                                    c.less = new Node() { key = key, value = value };
+                                    c.height = 0;
+                                    while (stack.Count != 0)
+                                        stack.Pop().height = 0;
+                                    root.Balance(ref root);
+                                    Count++;
+                                    state = state ^ state << 1;
+                                    return;
+                                }
+                                stack.Push(c);
+                                c = c.less;
+                            }
+                        }
+                        while (true);
+                    }
+                }
+            }
+        }
+
+        public void Clear()
+        {
+            Count = 0;
+            root = null;
+            state = state ^ state << 1;
+        }
+
+        public void Add(KeyValuePair<TKey, TValue> keyValuePair)
+        {
+            Add(keyValuePair.Key, keyValuePair.Value);
+        }
+
+        public void Add(TKey key, TValue value)
+        {
+            Insert(key, value, true);
+        }
+
+        public bool Insert(TKey key, TValue value, bool throwIfExists)
+        {
+            lock (this)
+            {
                 if (key == null)
-                    throw new ArgumentNullException();
+                    throw new ArgumentNullException("key");
                 if (root == null)
                 {
                     root = new Node() { value = value, key = key };
                     Count++;
+                    state = state ^ state << 1;
+                    return true;
                 }
                 else
                 {
                     var c = root;
+                    stack.Clear();
                     do
                     {
-                        var cmp = string.Compare(key, c.key, StringComparison.Ordinal);
+                        var cmp = comparer != null ? comparer.Compare(key, c.key) : key.CompareTo(c.key);
                         if (cmp == 0)
                         {
-                            c.value = value;
-                            return;
+                            if (throwIfExists)
+                                throw new ArgumentException("Element exists");
+                            else
+                                return false;
                         }
                         else if (cmp > 0)
                         {
@@ -283,7 +413,8 @@ namespace NiL.BD
                                     stack.Pop().height = 0;
                                 root.Balance(ref root);
                                 Count++;
-                                return;
+                                state = state ^ state << 1;
+                                return true;
                             }
                             stack.Push(c);
                             c = c.greater;
@@ -298,7 +429,8 @@ namespace NiL.BD
                                     stack.Pop().height = 0;
                                 root.Balance(ref root);
                                 Count++;
-                                return;
+                                state = state ^ state << 1;
+                                return true;
                             }
                             stack.Push(c);
                             c = c.less;
@@ -308,106 +440,159 @@ namespace NiL.BD
                 }
             }
         }
-
-        public void Clear()
+#if INLINE
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#endif
+        public bool TryGetValue(TKey key, out TValue value)
         {
-            Count = 0;
-            root = null;
-        }
-
-        public void Add(KeyValuePair<string, T> keyValuePair)
-        {
-            Add(keyValuePair.Key, keyValuePair.Value);
-        }
-
-        public void Add(string key, T value)
-        {
-            if (key == null)
-                throw new ArgumentNullException();
-            if (root == null)
+            lock (this)
             {
-                root = new Node() { value = value, key = key };
-                Count++;
+                if (root == null)
+                {
+                    value = default(TValue);
+                    return false;
+                }
+                else
+                {
+                    var c = root;
+                    do
+                    {
+                        var cmp = comparer != null ? comparer.Compare(key, c.key) : key.CompareTo(c.key);
+                        if (cmp == 0)
+                        {
+                            value = c.value;
+                            return true;
+                        }
+                        else if (cmp > 0)
+                        {
+                            if (c.greater == null)
+                            {
+                                value = default(TValue);
+                                return false;
+                            }
+                            c = c.greater;
+                        }
+                        else
+                        {
+                            if (c.less == null)
+                            {
+                                value = default(TValue);
+                                return false;
+                            }
+                            c = c.less;
+                        }
+                    }
+                    while (true);
+                }
             }
-            else
+        }
+
+        public bool ContainsKey(TKey key)
+        {
+            TValue temp;
+            return TryGetValue(key, out temp);
+        }
+
+        public bool Contains(KeyValuePair<TKey, TValue> keyValuePair)
+        {
+            TValue temp;
+            return TryGetValue(keyValuePair.Key, out temp) && keyValuePair.Value.Equals(temp);
+        }
+
+        public bool Remove(TKey key)
+        {
+            if (root == null)
+                return false;
+            lock (this)
             {
+                Node prev = null;
                 var c = root;
-                var stack = new Stack<Node>();
+                stack.Clear();
                 do
                 {
-                    var cmp = string.Compare(key, c.key, StringComparison.Ordinal);
+                    var cmp = comparer != null ? comparer.Compare(key, c.key) : key.CompareTo(c.key);
                     if (cmp == 0)
-                        throw new ArgumentException();
-                    else if (cmp > 0)
                     {
                         if (c.greater == null)
                         {
-                            c.greater = new Node() { key = key, value = value };
-                            c.height = 0;
-                            while (stack.Count != 0)
-                                stack.Pop().height = 0;
-                            root.Balance(ref root);
-                            Count++;
-                            return;
+                            if (prev == null)
+                                root = c.less;
+                            else
+                            {
+                                if (prev.greater == c)
+                                    prev.greater = c.less;
+                                else
+                                    prev.less = c.less;
+                            }
                         }
-                        stack.Push(c);
-                        c = c.greater;
-                    }
-                    else if (cmp < 0)
-                    {
-                        if (c.less == null)
+                        else if (c.less == null)
                         {
-                            c.less = new Node() { key = key, value = value };
-                            c.height = 0;
-                            while (stack.Count != 0)
-                                stack.Pop().height = 0;
-                            root.Balance(ref root);
-                            Count++;
-                            return;
+                            if (prev == null)
+                                root = c.greater;
+                            else
+                            {
+                                if (prev.greater == c)
+                                    prev.greater = c.greater;
+                                else
+                                    prev.less = c.greater;
+                            }
                         }
-                        stack.Push(c);
-                        c = c.less;
-                    }
-                }
-                while (true);
-            }
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool TryGetValue(string key, out T value)
-        {
-            if (root == null)
-            {
-                value = default(T);
-                return false;
-            }
-            else
-            {
-                var c = root;
-                do
-                {
-                    var cmp = string.CompareOrdinal(key, c.key);
-                    if (cmp == 0)
-                    {
-                        value = c.value;
+                        else
+                        {
+                            var caret = c.less;
+                            if (caret.greater != null)
+                            {
+                                caret.height = 0;
+                                var pcaret = c;
+                                while (caret.greater != null)
+                                {
+                                    pcaret = caret;
+                                    caret = caret.greater;
+                                    caret.height = 0;
+                                }
+                                pcaret.greater = caret.less;
+                                caret.greater = c.greater;
+                                caret.less = c.less;
+                                if (prev == null)
+                                    root = caret;
+                                else if (prev.greater == c)
+                                    prev.greater = caret;
+                                else
+                                    prev.less = caret;
+                            }
+                            else
+                            {
+                                caret.height = 0;
+                                caret.greater = c.greater;
+                                if (prev == null)
+                                    root = caret;
+                                else if (prev.greater == c)
+                                    prev.greater = caret;
+                                else
+                                    prev.less = caret;
+                            }
+                        }
+                        while (stack.Count > 0)
+                            stack.Pop().height = 0;
+                        if (root != null)
+                            root.Balance(ref root);
+                        Count--;
                         return true;
                     }
                     else if (cmp > 0)
                     {
                         if (c.greater == null)
-                        {
-                            value = default(T);
                             return false;
-                        }
+                        prev = c;
+                        stack.Push(c);
                         c = c.greater;
                     }
                     else
                     {
                         if (c.less == null)
-                        {
-                            value = default(T);
                             return false;
-                        }
+                        prev = c;
+                        stack.Push(c);
                         c = c.less;
                     }
                 }
@@ -415,137 +600,168 @@ namespace NiL.BD
             }
         }
 
-        public bool ContainsKey(string key)
+        public bool Remove(KeyValuePair<TKey, TValue> keyValuePair)
         {
-            T temp;
-            return TryGetValue(key, out temp);
-        }
-
-        public bool Contains(KeyValuePair<string, T> keyValuePair)
-        {
-            T temp;
-            return TryGetValue(keyValuePair.Key, out temp) && keyValuePair.Value.Equals(temp);
-        }
-
-        public bool Remove(string key)
-        {
-            Node prev = null;
-            var c = root;
-            var stack = new Stack<Node>();
-            do
+            if (root == null)
+                return false;
+            lock (this)
             {
-                var cmp = string.CompareOrdinal(key, c.key);
-                if (cmp == 0)
+                var key = keyValuePair.Key;
+                Node prev = null;
+                var c = root;
+                stack.Clear();
+                do
                 {
-                    if (c.greater == null)
+                    var cmp = comparer != null ? comparer.Compare(key, c.key) : key.CompareTo(c.key);
+                    if (cmp == 0)
                     {
-                        if (prev == null)
-                            root = c.less;
+                        if (!keyValuePair.Value.Equals(c.value))
+                            return false;
+                        if (c.greater == null)
+                        {
+                            if (prev == null)
+                                root = c.less;
+                            else
+                            {
+                                if (prev.greater == c)
+                                    prev.greater = c.less;
+                                else
+                                    prev.less = c.less;
+                            }
+                        }
+                        else if (c.less == null)
+                        {
+                            if (prev == null)
+                                root = c.greater;
+                            else
+                            {
+                                if (prev.greater == c)
+                                    prev.greater = c.greater;
+                                else
+                                    prev.less = c.greater;
+                            }
+                        }
                         else
                         {
-                            if (prev.greater == c)
-                                prev.greater = c.less;
+                            var caret = c.less;
+                            if (caret.greater != null)
+                            {
+                                caret.height = 0;
+                                var pcaret = c;
+                                while (caret.greater != null)
+                                {
+                                    pcaret = caret;
+                                    caret = caret.greater;
+                                    caret.height = 0;
+                                }
+                                pcaret.greater = caret.less;
+                                caret.greater = c.greater;
+                                caret.less = c.less;
+                                if (prev == null)
+                                    root = caret;
+                                else if (prev.greater == c)
+                                    prev.greater = caret;
+                                else
+                                    prev.less = caret;
+                            }
                             else
-                                prev.less = c.less;
+                            {
+                                caret.height = 0;
+                                caret.greater = c.greater;
+                                if (prev == null)
+                                    root = caret;
+                                else if (prev.greater == c)
+                                    prev.greater = caret;
+                                else
+                                    prev.less = caret;
+                            }
                         }
+                        while (stack.Count > 0)
+                            stack.Pop().height = 0;
+                        root.Balance(ref root);
+                        return true;
                     }
-                    else if (c.less == null)
+                    else if (cmp > 0)
                     {
-                        if (prev == null)
-                            root = c.greater;
-                        else
-                        {
-                            if (prev.greater == c)
-                                prev.greater = c.greater;
-                            else
-                                prev.less = c.greater;
-                        }
+                        if (c.greater == null)
+                            return false;
+                        prev = c;
+                        stack.Push(c);
+                        c = c.greater;
                     }
                     else
                     {
-                        var caret = c.less;
-                        if (caret.greater != null)
-                        {
-                            caret.height = 0;
-                            var pcaret = c;
-                            while (caret.greater != null)
-                            {
-                                pcaret = caret;
-                                caret = caret.greater;
-                                caret.height = 0;
-                            }
-                            pcaret.greater = caret.less;
-                            caret.greater = c.greater;
-                            caret.less = c.less;
-                            if (prev == null)
-                                root = caret;
-                            else if (prev.greater == c)
-                                prev.greater = caret;
-                            else
-                                prev.less = caret;
-                        }
-                        else
-                        {
-                            caret.height = 0;
-                            caret.greater = c.greater;
-                            if (prev == null)
-                                root = caret;
-                            else if (prev.greater == c)
-                                prev.greater = caret;
-                            else
-                                prev.less = caret;
-                        }
+                        if (c.less == null)
+                            return false;
+                        prev = c;
+                        stack.Push(c);
+                        c = c.less;
                     }
-                    while (stack.Count > 0)
-                        stack.Pop().height = 0;
-                    root.Balance(ref root);
-                    return true;
                 }
-                else if (cmp > 0)
-                {
-                    if (c.greater == null)
-                        return false;
-                    prev = c;
-                    stack.Push(c);
-                    c = c.greater;
-                }
-                else
-                {
-                    if (c.less == null)
-                        return false;
-                    prev = c;
-                    stack.Push(c);
-                    c = c.less;
-                }
+                while (true);
             }
-            while (true);
         }
 
-        public bool Remove(KeyValuePair<string, T> keyValuePair)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void CopyTo(KeyValuePair<string, T>[] array, int index)
+        public void CopyTo(KeyValuePair<TKey, TValue>[] array, int index)
         {
             if (array == null)
-                throw new ArgumentNullException();
+                throw new ArgumentNullException("array");
             if (index < 0)
-                throw new ArgumentOutOfRangeException();
+                throw new ArgumentOutOfRangeException("index");
             if (array.Length - index < Count)
-                throw new ArgumentException();
+                throw new ArgumentException("index and array incompatible with count of elements");
             foreach (var kvp in this)
                 array[index++] = kvp;
         }
 
-        public IEnumerator<KeyValuePair<string, T>> GetEnumerator()
+        internal IEnumerator<Node> enumerateReversed(Node node)
         {
-            Node[] stack = new Node[root.height];
-            int[] step = new int[root.height];
-            int sindex = -1;
-            if (root != null)
+            if (node != null)
             {
-                stack[++sindex] = root;
+                var sstate = state;
+                Node[] stack = new Node[node.height];
+                int[] step = new int[node.height];
+                int sindex = -1;
+                stack[++sindex] = node;
+                while (sindex >= 0)
+                {
+                    if (step[sindex] == 0 && stack[sindex].greater != null)
+                    {
+                        stack[sindex + 1] = stack[sindex].greater;
+                        step[sindex] = 1;
+                        sindex++;
+                        step[sindex] = 0;
+                        continue;
+                    }
+                    if (step[sindex] < 2)
+                    {
+                        step[sindex] = 2;
+                        yield return stack[sindex];
+                        if (sstate != state)
+                            throw new InvalidOperationException("Коллекция была изменена после создания перечислителя.");
+                    }
+                    if (step[sindex] < 3 && stack[sindex].less != null)
+                    {
+                        stack[sindex + 1] = stack[sindex].less;
+                        step[sindex] = 3;
+                        sindex++;
+                        step[sindex] = 0;
+                        continue;
+                    }
+                    sindex--;
+                }
+            }
+        }
+
+        internal IEnumerator<Node> enumerate(Node node)
+        {
+            if (node != null)
+            {
+                var sstate = state;
+                Node[] stack = new Node[node.height];
+                int[] step = new int[node.height];
+                int sindex = -1;
+                stack[++sindex] = node;
                 while (sindex >= 0)
                 {
                     if (step[sindex] == 0 && stack[sindex].less != null)
@@ -559,7 +775,9 @@ namespace NiL.BD
                     if (step[sindex] < 2)
                     {
                         step[sindex] = 2;
-                        yield return new KeyValuePair<string, T>(stack[sindex].key, stack[sindex].value);
+                        yield return stack[sindex];
+                        if (sstate != state)
+                            throw new InvalidOperationException("Коллекция была изменена после создания перечислителя.");
                     }
                     if (step[sindex] < 3 && stack[sindex].greater != null)
                     {
@@ -574,9 +792,151 @@ namespace NiL.BD
             }
         }
 
+        internal IEnumerable<Node> Nodes
+        {
+            get
+            {
+                for (var e = enumerate(root); e.MoveNext(); )
+                    yield return e.Current;
+            }
+        }
+
+        public IEnumerable<KeyValuePair<TKey, TValue>> Reversed
+        {
+            get
+            {
+                for (var e = enumerateReversed(root); e.MoveNext(); )
+                    yield return new KeyValuePair<TKey, TValue>(e.Current.key, e.Current.value);
+            }
+        }
+
+        public IEnumerable<KeyValuePair<TKey, TValue>> NotLess(TKey keyValue)
+        {
+            return NotLess(keyValue, false, 0, int.MaxValue);
+        }
+
+        public IEnumerable<KeyValuePair<TKey, TValue>> NotLess(TKey keyValue, bool reversed)
+        {
+            return NotLess(keyValue, reversed, 0, int.MaxValue);
+        }
+
+        public IEnumerable<KeyValuePair<TKey, TValue>> NotLess(TKey keyValue, bool reversed, long offset)
+        {
+            return NotLess(keyValue, reversed, offset, int.MaxValue);
+        }
+
+        public IEnumerable<KeyValuePair<TKey, TValue>> NotLess(TKey keyValue, bool reversed, long offset, long count)
+        {
+            var c = Root;
+            if (c != null)
+                do
+                {
+                    var cmp = comparer != null ? comparer.Compare(keyValue, c.key) : (keyValue as IComparable).CompareTo(c.key);
+                    if (cmp <= 0)
+                    {
+                        var enmrtr = reversed ? enumerateReversed(c) : enumerate(c);
+                        while (count-- > 0 && enmrtr.MoveNext())
+                        {
+                            if (offset-- > 0)
+                            {
+                                count++;
+                                continue;
+                            }
+                            var crnt = enmrtr.Current;
+                            if ((keyValue as IComparable).CompareTo(crnt.key) <= 0)
+                                yield return new KeyValuePair<TKey, TValue>(crnt.key, crnt.value);
+                        }
+                        break;
+                    }
+                    else if (cmp > 0)
+                    {
+                        c = c.greater;
+                    }
+                    if (c == null)
+                        break;
+                }
+                while (true);
+        }
+
+        public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator()
+        {
+            for (var e = enumerate(root); e.MoveNext(); )
+                yield return new KeyValuePair<TKey, TValue>(e.Current.key, e.Current.value);
+        }
+
         IEnumerator IEnumerable.GetEnumerator()
         {
-            return (this as IEnumerable<KeyValuePair<string, T>>).GetEnumerator();
+            return (this as IEnumerable<KeyValuePair<TKey, TValue>>).GetEnumerator();
+        }
+    }
+
+    [Serializable]
+    public sealed class BinaryTree<TValue> : BinaryTree<string, TValue>
+    {
+        public BinaryTree()
+        {
+
+        }
+
+        private BinaryTree(SerializationInfo info, StreamingContext context)
+            : base(info, context)
+        {
+
+        }
+
+        public IEnumerable<KeyValuePair<string, TValue>> StartedWith(string prefix)
+        {
+            return StartedWith(prefix, false, 0, int.MaxValue);
+        }
+
+        public IEnumerable<KeyValuePair<string, TValue>> StartedWith(string prefix, bool reversed)
+        {
+            return StartedWith(prefix, reversed, 0, int.MaxValue);
+        }
+
+        public IEnumerable<KeyValuePair<string, TValue>> StartedWith(string prefix, bool reversed, long offset)
+        {
+            return StartedWith(prefix, reversed, offset, int.MaxValue);
+        }
+
+        public IEnumerable<KeyValuePair<string, TValue>> StartedWith(string prefix, bool reversed, long offset, long count)
+        {
+            var c = Root;
+            if (c != null)
+                do
+                {
+                    var cmp = c.key.StartsWith(prefix) ? 0 : prefix.CompareTo(c.key);
+                    if (cmp == 0)
+                    {
+                        var enmrtr = reversed ? enumerateReversed(c) : enumerate(c);
+                        while (count > 0 && enmrtr.MoveNext())
+                        {
+                            var crnt = enmrtr.Current;
+                            if (crnt.key.StartsWith(prefix))
+                            {
+                                if (offset > 0)
+                                {
+                                    offset--;
+                                    continue;
+                                }
+                                count--;
+                                yield return new KeyValuePair<string, TValue>(crnt.key, crnt.value);
+                            }
+                        }
+                        break;
+                    }
+                    else if (cmp > 0)
+                    {
+                        c = c.greater;
+                    }
+                    else
+                    {
+                        c = c.less;
+                    }
+                    if (c == null)
+                        break;
+                }
+                while (true);
         }
     }
 }
