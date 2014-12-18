@@ -8,13 +8,13 @@ using System.Threading.Tasks;
 
 namespace NiL.BD
 {
-    public sealed class IndexedDictionary<TKey, TValue> : IDictionary<TKey, TValue>
+    public sealed class IndexedDictionarySB<TKey, TValue> : IDictionary<TKey, TValue>
     {
         private sealed class ValueCollection : ICollection<TValue>
         {
-            private IndexedDictionary<TKey, TValue> owner;
+            private IndexedDictionarySB<TKey, TValue> owner;
 
-            public ValueCollection(IndexedDictionary<TKey, TValue> owner)
+            public ValueCollection(IndexedDictionarySB<TKey, TValue> owner)
             {
                 this.owner = owner;
             }
@@ -35,7 +35,7 @@ namespace NiL.BD
             {
                 for (var i = owner.items.Length; i-- > 0; )
                 {
-                    if (object.Equals(owner.items[i].Value, item) && owner.ContainsKey(owner.items[i].Key))
+                    if (object.Equals(owner.items[i].value, item) && owner.ContainsKey(owner.items[i].key))
                         return true;
                 }
                 return false;
@@ -86,9 +86,9 @@ namespace NiL.BD
 
         private sealed class KeyCollection : ICollection<TKey>
         {
-            private IndexedDictionary<TKey, TValue> owner;
+            private IndexedDictionarySB<TKey, TValue> owner;
 
-            public KeyCollection(IndexedDictionary<TKey, TValue> owner)
+            public KeyCollection(IndexedDictionarySB<TKey, TValue> owner)
             {
                 this.owner = owner;
             }
@@ -155,19 +155,18 @@ namespace NiL.BD
 
         private sealed class _ListNode
         {
-            public TKey key;
             public _ListNode next;
             public int index;
         }
 
         [Serializable]
-        private sealed class _Node
+        private struct _Node
         {
             public int hash;
-            public _Node _0;
-            public _Node _1;
+            public int _0;
+            public int _1;
             public TKey key;
-            public int index;
+            public TValue value;
             /// <summary>
             /// For linked list implementation
             /// </summary>
@@ -175,93 +174,86 @@ namespace NiL.BD
 
             public override string ToString()
             {
-                return "key = " + key + ", index = " + index;
+                return "[" + key + ", " + value + "]";
             }
         }
 
-        private KeyValuePair<TKey, TValue>[] items;
+        private _Node[] items;
         private List<int> emptyIndexes;
-        private _Node root;
+        private int root;
         private int size;
         private IComparer<TKey> comparer;
-        private static readonly KeyValuePair<TKey, TValue>[] emptyArray = new KeyValuePair<TKey, TValue>[0];
+        private static readonly _Node[] emptyArray = new _Node[0];
 
-        public IndexedDictionary()
+        public IndexedDictionarySB()
         {
             if (!typeof(IComparable).IsAssignableFrom(typeof(TKey)))
                 throw new ArgumentException(typeof(TKey) + " do not immplement IComparable interface");
             comparer = Comparer<TKey>.Default;
             items = emptyArray;
+            root = -1;
         }
 
         private int findIndex(TKey key)
         {
-            if (root == null)
+            if (root == -1)
                 return -1;
             var hash = key.GetHashCode();
             var node = root;
 #if INVERSE
-            for (var i = sizeof(int) * 8; node != null && i-- > 0; )
+            for (var i = sizeof(int) * 8; node != -1 && i-- > 0; )
 #else
             for (var i = 0; node != null && i < sizeof(int) * 8; i++)
 #endif
             {
-                if (node.hash == hash)
+                if (items[node].hash == hash)
                     break;
                 if ((hash & (1 << i)) == 0)
-                    node = node._0;
+                    node = items[node]._0;
                 else
-                    node = node._1;
+                    node = items[node]._1;
             }
-            if (node == null)
+            if (node == -1)
                 return -1;
-            if (comparer.Compare(node.key, key) != 0)
+            if (comparer.Compare(items[node].key, key) != 0)
             {
-                var listItem = node.list;
-                while (listItem != null && comparer.Compare(listItem.key, key) != 0)
+                var listItem = items[node].list;
+                while (listItem != null && comparer.Compare(items[listItem.index].key, key) != 0)
                     listItem = listItem.next;
                 if (listItem == null)
                     return -1;
                 return listItem.index;
             }
             else
-                return node.index;
+                return node;
         }
 
         private void insert(TKey key, TValue value, bool @throw)
         {
-            _Node prewNode = null;
+            int prewNode = -1;
             _ListNode prew = null;
             _ListNode listItem = null;
             var node = root;
             var hash = key.GetHashCode();
-            if (root == null)
+            if (root == -1)
             {
                 placeKVPair(ref root, hash, key, value);
                 return;
             }
 #if INVERSE
             var i = sizeof(int) * 8;
-            for (; node != null && i-- >= 0; )
+            for (; node != -1 && i-- >= 0; )
 #else
             var i = 0;
             for (; node != null && i <= sizeof(int) * 8; i++)
 #endif
             {
-                if (node.index == -1) // zombie node
+                if (items[node].hash == hash)
                 {
-                    node.index = popEmptyIndex();
-                    node.hash = hash;
-                    node.key = key;
-                    items[node.index] = new KeyValuePair<TKey, TValue>(key, value);
-                    return;
-                }
-                if (node.hash == hash)
-                {
-                    if (comparer.Compare(node.key, key) != 0)
+                    if (comparer.Compare(items[node].key, key) != 0)
                     {
-                        listItem = node.list;
-                        while (listItem != null && comparer.Compare(listItem.key, key) != 0)
+                        listItem = items[node].list;
+                        while (listItem != null && comparer.Compare(items[listItem.index].key, key) != 0)
                         {
                             prew = listItem;
                             listItem = listItem.next;
@@ -269,7 +261,7 @@ namespace NiL.BD
                         if (listItem == null)
                         {
                             if (prew == null)
-                                placeKVPair(ref node.list, hash, key, value);
+                                placeKVPair(ref items[node].list, hash, key, value);
                             else
                                 placeKVPair(ref prew.next, hash, key, value);
                         }
@@ -277,14 +269,14 @@ namespace NiL.BD
                         {
                             if (@throw)
                                 throw new InvalidOperationException();
-                            items[listItem.index] = new KeyValuePair<TKey, TValue>(key, value);
+                            items[listItem.index] = new _Node() { value = value, key = key };
                         }
                     }
                     else
                     {
                         if (@throw)
                             throw new InvalidOperationException();
-                        items[node.index] = new KeyValuePair<TKey, TValue>(key, value);
+                        items[node].value = value;
                     }
                     return;
                 }
@@ -300,13 +292,13 @@ namespace NiL.BD
                 }
                 prewNode = node;
                 if ((hash & (1 << i)) == 0)
-                    node = node._0;
+                    node = items[node]._0;
                 else
-                    node = node._1;
+                    node = items[node]._1;
             }
             // here node is null reference
 #if DEBUG
-            if (node != null)
+            if (node != -1)
                 System.Diagnostics.Debugger.Break();
 #endif
 #if INVERSE
@@ -314,30 +306,29 @@ namespace NiL.BD
 #else
             if ((hash & (1 << --i)) == 0)
 #endif
-                placeKVPair(ref prewNode._0, hash, key, value);
+                placeKVPair(ref items[prewNode]._0, hash, key, value);
             else
-                placeKVPair(ref prewNode._1, hash, key, value);
+                placeKVPair(ref items[prewNode]._1, hash, key, value);
         }
 
-        private void placeKVPair(ref _Node dest, int hash, TKey key, TValue value)
+        private void placeKVPair(ref int dest, int hash, TKey key, TValue value)
         {
-            dest = new _Node()
+            dest = popEmptyIndex();
+            items[dest] = new _Node()
             {
                 hash = hash,
                 key = key,
-                index = popEmptyIndex()
+                value = value
             };
-            items[dest.index] = new KeyValuePair<TKey, TValue>(key, value);
         }
 
         private void placeKVPair(ref _ListNode dest, int hash, TKey key, TValue value)
         {
             dest = new _ListNode()
             {
-                key = key,
                 index = popEmptyIndex()
             };
-            items[dest.index] = new KeyValuePair<TKey, TValue>(key, value);
+            items[dest.index] = new _Node() { key = key, value = value };
         }
 
         private int popEmptyIndex()
@@ -354,7 +345,7 @@ namespace NiL.BD
             }
             if (size == items.Length)
             {
-                var newItems = new KeyValuePair<TKey, TValue>[Math.Max(2, items.Length * 2)];
+                var newItems = new _Node[Math.Max(2, items.Length * 2)];
                 for (var i = 0; i < items.Length; i++)
                     newItems[i] = items[i];
                 items = newItems;
@@ -382,32 +373,32 @@ namespace NiL.BD
 
         public bool Remove(TKey key)
         {
-            if (root == null)
+            if (root == -1)
                 return false;
             var hash = key.GetHashCode();
             var node = root;
 #if INVERSE
             var i = sizeof(int) * 8;
-            for (; node != null && i-- > 0; )
+            for (; node != -1 && i-- > 0; )
 #else
             var i = 0;
             for (; node != null && i < sizeof(int) * 8; i++)
 #endif
             {
-                if (node.index != -1 && node.hash == hash)
+                if (items[node].hash == hash)
                     break;
                 if ((hash & (1 << i)) == 0)
-                    node = node._0;
+                    node = items[node]._0;
                 else
-                    node = node._1;
+                    node = items[node]._1;
             }
-            if (node == null)
+            if (node == -1)
                 return false;
-            if (comparer.Compare(node.key, key) != 0)
+            if (comparer.Compare(items[node].key, key) != 0)
             {
                 _ListNode prewList = null;
-                var listItem = node.list;
-                while (listItem != null && comparer.Compare(listItem.key, key) != 0)
+                var listItem = items[node].list;
+                while (listItem != null && comparer.Compare(items[listItem.index].key, key) != 0)
                 {
                     prewList = listItem;
                     listItem = listItem.next;
@@ -415,22 +406,23 @@ namespace NiL.BD
                 if (listItem == null)
                     return false;
                 if (prewList == null)
-                    node.list = null;
+                    items[node].list = null;
                 else
                     prewList.next = listItem.next;
                 pushEmptyIndex(listItem.index);
             }
             else
             {
-                pushEmptyIndex(node.index);
-                if (node.list != null)
+                pushEmptyIndex(node);
+                if (items[node].list != null)
                 {
-                    node.key = node.list.key;
-                    node.list = node.list.next;
-                    node.index = node.list.index;
+                    var li = items[node].list.index;
+                    items[node].key = items[li].key;
+                    items[node].list = items[li].list;
+                    items[node].value = items[li].value;
                 }
-                else
-                    node.index = -1; // make zombie
+                //else
+                //    node.index = -1; // make zombie
             }
             size--;
             return true;
@@ -438,7 +430,7 @@ namespace NiL.BD
 
         private void pushEmptyIndex(int index)
         {
-            items[index] = default(KeyValuePair<TKey, TValue>);
+            items[index] = default(_Node);
             (emptyIndexes ?? (emptyIndexes = new List<int>())).Add(index);
         }
 
@@ -448,7 +440,7 @@ namespace NiL.BD
             var index = findIndex(key);
             if (index == -1)
                 return false;
-            value = items[index].Value;
+            value = items[index].value;
             return true;
         }
 
@@ -464,7 +456,7 @@ namespace NiL.BD
                 var index = findIndex(key);
                 if (index == -1)
                     throw new KeyNotFoundException();
-                return items[index].Value;
+                return items[index].value;
             }
             set
             {
@@ -486,7 +478,7 @@ namespace NiL.BD
             size = 0;
             items = emptyArray;
             emptyIndexes = null;
-            root = null;
+            root = -1;
         }
 
         public bool Contains(KeyValuePair<TKey, TValue> item)
@@ -521,9 +513,9 @@ namespace NiL.BD
 
         public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator()
         {
-            if (root == null || size == 0)
+            if (root == -1 || size == 0)
                 yield break;
-            var stack = new _Node[33];
+            var stack = new int[33];
             var stepstack = new byte[33];
             int stackIndex = 0;
             var node = root;
@@ -531,34 +523,33 @@ namespace NiL.BD
             {
                 if ((stepstack[stackIndex] & 1) == 0)
                 {
-                    while (node._1 != null)
+                    while (items[node]._1 != -1)
                     {
                         stepstack[stackIndex] |= 1;
                         stack[stackIndex++] = node;
                         stepstack[stackIndex] = 0;
-                        node = node._1;
+                        node = items[node]._1;
                     }
                 }
                 if ((stepstack[stackIndex] & 2) == 0)
                 {
-                    if (node._0 != null)
+                    if (items[node]._0 != -1)
                     {
                         stepstack[stackIndex] |= 2;
                         stack[stackIndex++] = node;
                         stepstack[stackIndex] = 0;
-                        node = node._0;
+                        node = items[node]._0;
                         continue;
                     }
                 }
                 if ((stepstack[stackIndex] & 4) == 0)
                 {
                     stepstack[stackIndex] |= 4;
-                    if (node.index != -1)
-                        yield return items[node.index];
-                    var list = node.list;
+                    yield return new KeyValuePair<TKey, TValue>(items[node].key, items[node].value);
+                    var list = items[node].list;
                     while (list != null)
                     {
-                        yield return items[list.index];
+                        yield return new KeyValuePair<TKey, TValue>(items[list.index].key, items[list.index].value);
                         list = list.next;
                     }
                 }

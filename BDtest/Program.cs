@@ -12,6 +12,80 @@ namespace BDtest
 {
     class Program
     {
+        private static int psrandmul = 137153;
+
+        /// <summary>
+        /// StringMap
+        /// </summary>
+        private static void benchmark7()
+        {
+            GC.Collect();
+            var dictionary = new StringMap<int>();
+            var keys = new string[10000000];
+            for (int i = 0; i < keys.Length; i++)
+                keys[i] = i.ToString();
+            var sw = new Stopwatch();
+            sw.Start();
+            for (int i = 0; i < keys.Length; i++)
+                dictionary.Add(keys[(long)i * psrandmul % keys.Length], (i * psrandmul) % keys.Length);
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+            GC.GetTotalMemory(true);
+            sw.Restart();
+            foreach (var t in dictionary)
+            {
+                // System.Diagnostics.Debugger.Break(); // порядок не соблюдается. Проверка бессмыслена
+            }
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+            GC.GetTotalMemory(true);
+            sw.Restart();
+            for (int i = 0; i < keys.Length; i++)
+            {
+                if (dictionary[keys[i]] != i)
+                    throw new Exception();
+            }
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+        }
+
+        /// <summary>
+        /// SparseArray
+        /// </summary>
+        private static void benchmark6()
+        {
+            GC.Collect();
+            var array = new SparseArray<string>();
+            var keys = new string[10000000];
+            for (int i = 0; i < keys.Length; i++)
+                keys[i] = i.ToString();
+            var sw = new Stopwatch();
+            sw.Start();
+            for (long i = 0; i < keys.Length; i++)
+                array[(int)(i * psrandmul % keys.Length)] = keys[(int)(i * psrandmul % keys.Length)];
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+            GC.GetTotalMemory(true);
+            var index = 0;
+            sw.Restart();
+            foreach (var t in array)
+            {
+                if (t != keys[index++])
+                    System.Diagnostics.Debugger.Break();
+            }
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+            GC.GetTotalMemory(true);
+            sw.Restart();
+            for (int i = 0; i < keys.Length; i++)
+            {
+                if (array[i] != keys[i])
+                    System.Diagnostics.Debugger.Break();
+            }
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+        }
+
         /// <summary>
         /// IndexedDictionary
         /// </summary>
@@ -48,50 +122,20 @@ namespace BDtest
             sw.Stop();
             Console.WriteLine(sw.Elapsed);
         }
-
-        private static void benchmark4()
-        {
-            GC.Collect();
-            var tree = new SortedDictionary<string, int>();
-            tree["0"] = 0;
-            tree.Clear();
-            var sw = new Stopwatch();
-            sw.Start();
-            for (int i = 0; i < 10000000; i++)
-            {
-                var temp = i.ToString();
-                tree[temp] = i;
-            }
-            sw.Stop();
-            Console.WriteLine(sw.Elapsed);
-            GC.GetTotalMemory(true);
-            sw.Restart();
-            foreach (var t in tree)
-            {
-
-            }
-            sw.Stop();
-            Console.WriteLine(sw.Elapsed);
-            GC.GetTotalMemory(true);
-            sw.Restart();
-            var test = tree["12345"];
-            sw.Stop();
-            Console.WriteLine(sw.Elapsed);
-        }
-
+        /// <summary>
+        /// SortedDictionary
+        /// </summary>
         private static void benchmark3()
         {
             GC.Collect();
-            var tree = new System.Collections.Specialized.StringDictionary();
-            tree["0"] = "0";
-            tree.Clear();
+            var tree = new SortedDictionary<int, string>();
+            var keys = new string[10000000];
+            for (int i = 0; i < keys.Length; i++)
+                keys[i] = i.ToString();
             var sw = new Stopwatch();
             sw.Start();
-            for (int i = 0; i < 10000000; i++)
-            {
-                var temp = i.ToString();
-                tree[temp] = temp;
-            }
+            for (long i = 0; i < keys.Length; i++)
+                tree[(int)(i * psrandmul % keys.Length)] = keys[i * psrandmul % keys.Length];
             sw.Stop();
             Console.WriteLine(sw.Elapsed);
             GC.GetTotalMemory(true);
@@ -104,7 +148,11 @@ namespace BDtest
             Console.WriteLine(sw.Elapsed);
             GC.GetTotalMemory(true);
             sw.Restart();
-            var test = tree["12345"];
+            for (int i = 0; i < keys.Length; i++)
+            {
+                if (tree[i] != keys[i])
+                    throw new Exception();
+            }
             sw.Stop();
             Console.WriteLine(sw.Elapsed);
         }
@@ -115,31 +163,33 @@ namespace BDtest
         private static void benchmark2()
         {
             GC.Collect();
-            var tree = new Dictionary<int, int>();
-            tree[default(int)] = 0;
-            tree.Clear();
-            var keys = new int[10000000];
-            for (int i = 0; i < 10000000; i++)
-                keys[i] = i;
+            var dictionary = new Dictionary<int, string>();
+            var keys = new string[10000000];
+            for (int i = 0; i < keys.Length; i++)
+                keys[i] = i.ToString();
             var sw = new Stopwatch();
             sw.Start();
-            for (int i = 0; i < 10000000; i++)
-                tree[keys[i]] = i;
+            for (long i = 0; i < keys.Length; i++)
+                dictionary[(int)(i * psrandmul % keys.Length)] = keys[i * psrandmul % keys.Length];
             sw.Stop();
             Console.WriteLine(sw.Elapsed);
             GC.GetTotalMemory(true);
+            var index = 0;
             sw.Restart();
-            foreach (var t in tree)
+            foreach (var t in dictionary)
             {
-
+                if (t.Value != keys[index++])
+                {
+                    // System.Diagnostics.Debugger.Break(); // порядок не соблюдается. Проверка бессмыслена
+                }
             }
             sw.Stop();
             Console.WriteLine(sw.Elapsed);
             GC.GetTotalMemory(true);
             sw.Restart();
-            for (int i = 0; i < 10000000; i++)
+            for (int i = 0; i < keys.Length; i++)
             {
-                if (!tree.ContainsKey(keys[i]))
+                if (dictionary[i] != keys[i])
                     throw new Exception();
             }
             sw.Stop();
@@ -271,22 +321,7 @@ namespace BDtest
 
         static void Main(string[] args)
         {
-            //benchmark();
-            //benchmark2();
-            //benchmark5();
-            var id = new IndexedDictionary<int, int>();
-            var index = 0;
-            for (; index < 100; index++)
-            {
-                id.Add(index
-                    //* 137 % 10000
-                    , isPrime(index));
-            }
-            foreach (var i in id)
-            {
-                index--;
-                Console.WriteLine(index + " " + i + " " + isPrime(index));
-            }
+            benchmark7();
         }
 
         static void Main_(string[] args)
