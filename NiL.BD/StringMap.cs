@@ -10,21 +10,16 @@ namespace NiL.BD
     {
         private static readonly Entry[] emptyEntries = new Entry[0];
 
-        private const int ListLimit = 10;
+        private const int ListLimit = 17;
 
-        private enum EntryState : short
+        private enum EntryState
         {
             Empty = 0,
-            Deleted = 1,
-            Filled = 2
+            Filled
         }
 
         private struct Entry
         {
-            /// <summary>
-            /// Для сравнения в режиме списка
-            /// </summary>
-            public char firstChar;
             public EntryState state;
             /// <summary>
             /// Для сравнения в режиме хэш-таблицы
@@ -37,140 +32,114 @@ namespace NiL.BD
         private Entry[] entries;
         private TValue[] values;
         private int count;
-        private int insertIndex;
+
+        public static int missCount = 0;
 
         private int find(string key, bool create)
         {
-            if (create && entries.Length == 0)
-                increase();
-            if (key.Length == 0)
-                return entries.Length;
-            int hash = 0;
+            if (entries.Length == 0)
+            {
+                if (create)
+                    increase();
+                else
+                    return -1;
+            }
+            int hash = 0x0e0e0;
             var createIndex = -1;
+            var elen = entries.Length;
+            int i = 0;
+            int index = 0;
+            int keyLen = key.Length;
+            int prewIndex;
             if (entries.Length < ListLimit)
             {
-                var fc = key[0];
-                for (var i = entries.Length; i-- > 0 && entries[i].state > 0; )
+                for (i = 0; i < elen; i++)
                 {
-                    if (entries[i].state == EntryState.Deleted)
+                    if (entries[i].state == EntryState.Empty)
                     {
-                        if (create && createIndex == -1)
-                            createIndex = i;
+                        if (create)
+                        {
+                            entries[i].hash = key[0];
+                            return i;
+                        }
+                        else
+                            return -1;
                     }
-                    else if (fc == entries[i].firstChar && string.CompareOrdinal(entries[i].key, key) == 0)
+                    else if (key[0] == entries[i].hash
+                        && string.CompareOrdinal(entries[i].key, key) == 0)
                         return i;
                 }
                 if (create)
                 {
-                    if (createIndex == -1)
-                    {
-                        if (entries[entries.Length - 1].state == EntryState.Empty)
-                            createIndex = entries.Length - 1;
-                        else
-                        {
-                            increase();
-                            return find(key, true);
-                        }
-                    }
-                    entries[createIndex].firstChar = fc;
+                    increase();
+                    return find(key, true);
                 }
                 return createIndex;
             }
             else
             {
-                for (var i = 0; i < key.Length; i++)
+                for (i = 0; i < keyLen; i++)
                 {
+                    hash += hash >> 28;
+                    hash += hash << 4;
                     hash += key[i];
-                    hash ^= hash >> 27;
-                    hash += hash << 5;
-                    var index = (hash & int.MaxValue) % entries.Length;
-                    switch (entries[index].state)
-                    {
-                        case EntryState.Empty:
-                            {
-                                if (create)
-                                {
-                                    entries[index].hash = hash;
-                                    return index;
-                                }
-                                return -1;
-                            }
-                        case EntryState.Filled:
-                            {
-                                if (entries[index].hash == hash
-                                    && string.CompareOrdinal(entries[index].key, key) == 0)
-                                    return index;
-                                break;
-                            }
-                        case EntryState.Deleted:
-                            {
-                                if (create)
-                                {
-                                    createIndex = index;
-                                    entries[createIndex].hash = hash;
-                                }
-                                break;
-                            }
-                    }
-                }
-                {
-                    var startIndex = (hash & int.MaxValue) % entries.Length;
-                    var index = entries[startIndex].next;
-                    if (entries[index].hash != hash)
+                    index = (hash & int.MaxValue) % elen;
+                    if (entries[index].state == EntryState.Empty)
                     {
                         if (create)
                         {
-                            if (entries[insertIndex].state != EntryState.Empty)
-                            {
-                                increase();
-                                return find(key, true);
-                            }
-                            createIndex = insertIndex;
-                            entries[startIndex].next = createIndex;
-                            entries[createIndex].hash = hash;
-                            if (count + 1 < entries.Length)
-                                do
-                                {
-                                    insertIndex = (insertIndex + 1) % entries.Length;
-                                }
-                                while (entries[insertIndex].state != EntryState.Empty);
-                            return createIndex;
+                            entries[index].hash = hash;
+                            return index;
                         }
                         return -1;
                     }
-                    bool wasNil = index == 0;
-                    while (entries[index].hash == hash)
+                    else
                     {
-                        if (string.CompareOrdinal(entries[index].key, key) == 0)
+                        if (entries[index].hash == hash
+                            && string.CompareOrdinal(entries[index].key, key) == 0)
                             return index;
-                        if (entries[index].next == 0)
-                            if (wasNil)
-                                break;
-                            else
-                                wasNil = true;
-                        startIndex = index;
-                        index = entries[index].next;
                     }
-                    if (create)
-                    {
-                        if (entries[insertIndex].state != EntryState.Empty)
-                        {
-                            increase();
-                            return find(key, true);
-                        }
-                        createIndex = insertIndex;
-                        entries[startIndex].next = createIndex;
-                        entries[createIndex].hash = hash;
-                        if (count + 1 < entries.Length)
-                            do
-                            {
-                                insertIndex = (insertIndex + 1) % entries.Length;
-                            }
-                            while (entries[insertIndex].state != EntryState.Empty);
-                        return createIndex;
-                    }
-                    return -1;
                 }
+                if (!create)
+                    missCount++;
+                prewIndex = index;
+                index = entries[index].next - 1;
+                while (index >= 0) // для next нумерация будет с 1
+                {
+                    if (entries[index].state == EntryState.Filled
+                        && string.CompareOrdinal(entries[index].key, key) == 0)
+                        return index;
+
+                    prewIndex = index;
+                    index = entries[index].next - 1;
+                }
+                if (create)
+                {
+                    if (count >= elen)
+                    {
+                        // Здесь, так как всё предшествующее время мы убеждались, что такой ключ ещё не добавлен
+                        increase();
+                        return find(key, true);
+                    }
+                    var startIndex = prewIndex;
+                    createIndex = (prewIndex + 61) % elen;
+                    index = 0;
+                    while (entries[createIndex].state != EntryState.Empty && createIndex != startIndex)
+                    {
+                        createIndex = (createIndex + 61) % elen;
+                        index++;
+                    }
+                    if (entries[createIndex].state != EntryState.Empty
+                        || index > 50)
+                    {
+                        increase();
+                        return find(key, true);
+                    }
+                    entries[createIndex].hash = hash;
+                    entries[prewIndex].next = createIndex + 1;
+                    return createIndex;
+                }
+                return -1;
             }
         }
 
@@ -182,13 +151,11 @@ namespace NiL.BD
                 values = new TValue[3];
                 return;
             }
-            KeyValuePair<string, TValue>[] oldData = new KeyValuePair<string, TValue>[count];
-            for (int i = entries.Length, j = 0; i-- > 0; )
-            {
-                if (entries[i].state == EntryState.Filled)
-                    oldData[j++] = new KeyValuePair<string, TValue>(entries[i].key, values[i]);
-            }
-            if (entries.Length <= ListLimit >> 1 || entries.Length >= ListLimit)
+            if (entries.Length > 20000000)
+                throw new Exception();
+            var oldEntries = entries;
+            var oldValues = values;
+            if (entries.Length >= ListLimit || entries.Length <= ListLimit >> 1)
             {
                 entries = new Entry[entries.Length << 1];
                 values = new TValue[entries.Length + 1];
@@ -198,10 +165,17 @@ namespace NiL.BD
                 entries = new Entry[ListLimit];
                 values = new TValue[ListLimit + 1];
             }
-            count = 0;
-            insertIndex = 0;
-            for (var i = oldData.Length; i-- > 0; )
-                Add(oldData[i].Key, oldData[i].Value);
+            values[entries.Length] = oldValues[oldEntries.Length];
+            for (var i = 0; i < oldEntries.Length; i++)
+            {
+                if (oldEntries[i].state == EntryState.Filled)
+                {
+                    var index = find(oldEntries[i].key, true);
+                    entries[index].state = EntryState.Filled;
+                    entries[index].key = oldEntries[i].key;
+                    values[index] = oldValues[i];
+                }
+            }
         }
 
         public StringMap()
@@ -305,7 +279,6 @@ namespace NiL.BD
         public void Clear()
         {
             count = 0;
-            insertIndex = 0;
             for (var i = entries.Length; i-- > 0; )
             {
                 entries[i] = default(Entry);

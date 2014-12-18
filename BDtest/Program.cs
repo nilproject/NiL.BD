@@ -12,22 +12,22 @@ namespace BDtest
 {
     class Program
     {
-        private static int psrandmul = 137153;
+        private static int psrandmul = 1;//37153;
 
         /// <summary>
         /// StringMap
         /// </summary>
-        private static void benchmark7()
+        private static void benchmark7(int size)
         {
             GC.Collect();
             var dictionary = new StringMap<int>();
-            var keys = new string[10000000];
+            var keys = new string[size];
             for (int i = 0; i < keys.Length; i++)
                 keys[i] = i.ToString();
             var sw = new Stopwatch();
             sw.Start();
             for (int i = 0; i < keys.Length; i++)
-                dictionary.Add(keys[(long)i * psrandmul % keys.Length], (i * psrandmul) % keys.Length);
+                dictionary.Add(keys[(long)i * psrandmul % keys.Length], (int)(((long)i * psrandmul) % keys.Length));
             sw.Stop();
             Console.WriteLine(sw.Elapsed);
             GC.GetTotalMemory(true);
@@ -47,6 +47,7 @@ namespace BDtest
             }
             sw.Stop();
             Console.WriteLine(sw.Elapsed);
+            Console.WriteLine(StringMap<int>.missCount);
         }
 
         /// <summary>
@@ -160,11 +161,11 @@ namespace BDtest
         /// <summary>
         /// Dictionary
         /// </summary>
-        private static void benchmark2()
+        private static void benchmark2(int size)
         {
             GC.Collect();
             var dictionary = new Dictionary<int, string>();
-            var keys = new string[10000000];
+            var keys = new string[size];
             for (int i = 0; i < keys.Length; i++)
                 keys[i] = i.ToString();
             var sw = new Stopwatch();
@@ -321,7 +322,8 @@ namespace BDtest
 
         static void Main(string[] args)
         {
-            benchmark7();
+            benchmark7(1000000);
+            benchmark2(1000000);
         }
 
         static void Main_(string[] args)
