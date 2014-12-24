@@ -17,6 +17,41 @@ namespace BDtest
         /// <summary>
         /// StringMap
         /// </summary>
+        private static void benchmark8(int size)
+        {
+            GC.Collect();
+            var dictionary = new StringMap2<int>();
+            var keys = new string[size];
+            for (int i = 0; i < keys.Length; i++)
+                keys[i] = i.ToString();
+            var sw = new Stopwatch();
+            sw.Start();
+            for (int i = 0; i < keys.Length; i++)
+                dictionary.Add(keys[(long)i * psrandmul % keys.Length], (int)(((long)i * psrandmul) % keys.Length));
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+            GC.GetTotalMemory(true);
+            sw.Restart();
+            foreach (var t in dictionary)
+            {
+                // System.Diagnostics.Debugger.Break(); // порядок не соблюдается. Проверка бессмыслена
+            }
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+            GC.GetTotalMemory(true);
+            sw.Restart();
+            for (int i = 0; i < keys.Length; i++)
+            {
+                if (dictionary[keys[i]] != i)
+                    throw new Exception();
+            }
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+        }
+
+        /// <summary>
+        /// StringMap
+        /// </summary>
         private static void benchmark7(int size)
         {
             GC.Collect();
@@ -322,8 +357,20 @@ namespace BDtest
 
         static void Main(string[] args)
         {
-            benchmark7(1000000);
+            for (var i = 3; i-- > 0; )
+            {
             benchmark2(1000000);
+                GC.Collect(0);
+                GC.Collect(1);
+                GC.Collect(2);
+                GC.GetTotalMemory(true);
+                benchmark8(1000000);
+                Console.WriteLine("-------------------");
+                GC.Collect(0);
+                GC.Collect(1);
+                GC.Collect(2);
+                GC.GetTotalMemory(true);
+            }
         }
 
         static void Main_(string[] args)
