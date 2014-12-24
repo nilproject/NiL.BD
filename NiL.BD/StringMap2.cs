@@ -99,7 +99,8 @@ namespace NiL.BD
                 }
             }
             int prewIndex = -1;
-            for (index = hash & elen; ; )
+            index = hash & elen;
+            for (; ; )
             {
                 if (records[index].key == null)
                 {
@@ -141,6 +142,54 @@ namespace NiL.BD
                 value = emptyKeyValue;
                 return true;
             }
+            if (records.Length == 0)
+            {
+                value = default(TValue);
+                return false;
+            }
+            int hash;
+            int index;
+            hash = key[0];
+            index = (hash & int.MaxValue) % records.Length;
+            if (firstCharSearch)
+            {
+                if (records[index].hash == hash && string.CompareOrdinal(records[index].key, key) == 0)
+                {
+                    value = records[index].value;
+                    return true;
+                }
+            }
+            var keyLen = key.Length;
+            hash = (keyLen | (keyLen << 10)) ^ 0xe0e0e0;
+            for (var i = 0; i < keyLen; i++)
+                hash += (hash >> 27) + (hash << 5) + key[i];
+            //hash = key.GetHashCode();
+            for (index = hash & (records.Length - 1); index >= 0; index = records[index].next - 1)
+            {
+                if (records[index].hash == hash && string.CompareOrdinal(records[index].key, key) == 0)
+                {
+                    value = records[index].value;
+                    return true;
+                }
+            }
+            value = default(TValue);
+            return false;
+        }
+
+        public bool Remove(string key)
+        {
+            if (key == null)
+                throw new ArgumentNullException();
+            if (key.Length == 0)
+            {
+                if (!emptyKeyValueExists)
+                    return false;
+                emptyKeyValue = default(TValue);
+                emptyKeyValueExists = false;
+                return true;
+            }
+            if (records.Length == 0)
+                return false;
             int hash;
             int index;
             hash = key[0];
@@ -203,11 +252,6 @@ namespace NiL.BD
         public ICollection<string> Keys
         {
             get { throw new NotImplementedException(); }
-        }
-
-        public bool Remove(string key)
-        {
-            throw new NotImplementedException();
         }
         
         public ICollection<TValue> Values
