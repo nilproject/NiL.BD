@@ -78,11 +78,11 @@ namespace NiL.BD
             }
             else
             {
-                for (i = 0; i < keyLen; i++)
+                for (i = keyLen; i-- > 0; )
                 {
+                    hash += key[i] * 0x101;
                     hash += hash >> 28;
                     hash += hash << 4;
-                    hash += key[i];
                     index = (hash & int.MaxValue) % elen;
                     if (entries[index].state == EntryState.Empty)
                     {
@@ -95,13 +95,15 @@ namespace NiL.BD
                     }
                     else
                     {
-                        if (entries[index].hash == hash
-                            && string.CompareOrdinal(entries[index].key, key) == 0)
-                            return index;
+                        if (entries[index].hash == hash)
+                        {
+                            if (string.CompareOrdinal(entries[index].key, key) == 0)
+                                return index;
+                            if (create)
+                                missCount++; // вот в этом корень тормозов
+                        }
                     }
                 }
-                if (!create)
-                    missCount++;
                 prewIndex = index;
                 index = entries[index].next - 1;
                 while (index >= 0) // для next нумерация будет с 1
@@ -122,7 +124,7 @@ namespace NiL.BD
                         return find(key, true);
                     }
                     var startIndex = prewIndex;
-                    createIndex = (prewIndex + 61) % elen;
+                    createIndex = (prewIndex + 1) % elen;
                     index = 0;
                     while (entries[createIndex].state != EntryState.Empty && createIndex != startIndex)
                     {

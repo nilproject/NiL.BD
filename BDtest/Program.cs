@@ -12,7 +12,7 @@ namespace BDtest
 {
     class Program
     {
-        private static int psrandmul = 1;//37153;
+        private static int psrandmul = 137153;
 
         /// <summary>
         /// StringMap
