@@ -250,8 +250,8 @@ namespace BDtest
             sw.Restart();
             foreach (var t in dictionary)
             {
-                // System.Diagnostics.Debugger.Break(); // порядок не соблюдается. Проверка бессмыслена
-            }
+                    // System.Diagnostics.Debugger.Break(); // порядок не соблюдается. Проверка бессмыслена
+                }
             sw.Stop();
             Console.WriteLine(sw.Elapsed);
             GC.GetTotalMemory(true);
