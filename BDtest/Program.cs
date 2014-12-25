@@ -91,8 +91,8 @@ namespace BDtest
                 System.Diagnostics.Debugger.Break();
             sw.Stop();
             Console.WriteLine(sw.Elapsed);
-            //Console.WriteLine(dictionary.stat0);
-            //Console.WriteLine(dictionary.stat1);
+            Console.WriteLine(dictionary.stat0);
+            Console.WriteLine(dictionary.stat1);
         }
 
         /// <summary>
@@ -437,12 +437,12 @@ namespace BDtest
 
             for (var i = 3; i-- > 0; )
             {
-                benchmark2(4000000);
+                benchmark2(8000000);
                 GC.Collect(0);
                 GC.Collect(1);
                 GC.Collect(2);
                 GC.GetTotalMemory(true);
-                benchmark8(4000000);
+                benchmark8(8000000);
                 Console.WriteLine("-------------------");
                 GC.Collect(0);
                 GC.Collect(1);

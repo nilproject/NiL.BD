@@ -98,26 +98,29 @@ namespace NiL.BD
                     return;
                 }
                 index = records[index].next - 1;
-            } while (index >= 0);
+            } 
+            while (index >= 0);
             // не нашли
 
-            if (count == elen + 1)
+            if (
+                (count > 50 && count * 9 / 5 >= elen) ||
+                count == elen + 1)
                 elen = increaseSize() - 1;
             int prewIndex = -1;
             index = hash & elen;
 
             if (records[index].key != null)
             {
-                //stat0++;
+                stat0++;
                 while (records[index].next > 0)
                 {
-                    //stat1++;
+                    stat1++;
                     index = records[index].next - 1;
                     colisionCount++;
                 }
                 prewIndex = index;
                 while (records[index].key != null)
-                    index = (index + 1) & elen;
+                    index = (index + 61) & elen;
             }
             records[index].hash = hash;
             records[index].key = key;
@@ -133,18 +136,18 @@ namespace NiL.BD
             existedIndexes[eicount++] = index;
             count++;
 
-            if (colisionCount > 15)
+            if (colisionCount > 17)
                 increaseSize();
         }
 
-        //public int stat0;
-        //public int stat1;
+        public int stat0;
+        public int stat1;
 
         private static int computeHash(string key)
         {
             int hash;
             var keyLen = key.Length;
-            hash = keyLen * 0x51 ^ 0xecb901;
+            hash = keyLen * 0x51 ^ 0xe5b5e5;
             for (var i = 0; i < keyLen; i++)
                 hash += (hash >> 28) + (hash << 4) + key[i];
             return hash;
