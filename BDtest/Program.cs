@@ -67,23 +67,32 @@ namespace BDtest
             Console.WriteLine(sw.Elapsed);
             GC.GetTotalMemory(true);
             sw.Restart();
+            int c = 0;
             foreach (var t in dictionary)
             {
+                if (t.Key.Length != 0)
+                    c++;
                 // System.Diagnostics.Debugger.Break(); // порядок не соблюдается. Проверка бессмыслена
             }
+            if (c != dictionary.Count)
+                System.Diagnostics.Debugger.Break();
             sw.Stop();
             Console.WriteLine(sw.Elapsed);
             GC.GetTotalMemory(true);
             sw.Restart();
+            c = 0;
             for (int i = 0; i < keys.Length; i++)
             {
+                c++;
                 if (dictionary[keys[i]] != i)
                     throw new Exception();
             }
+            if (c != dictionary.Count)
+                System.Diagnostics.Debugger.Break();
             sw.Stop();
             Console.WriteLine(sw.Elapsed);
-            Console.WriteLine(dictionary.stat0);
-            Console.WriteLine(dictionary.stat1);
+            //Console.WriteLine(dictionary.stat0);
+            //Console.WriteLine(dictionary.stat1);
         }
 
         /// <summary>
@@ -248,10 +257,15 @@ namespace BDtest
             Console.WriteLine(sw.Elapsed);
             GC.GetTotalMemory(true);
             sw.Restart();
+            var c = 0;
             foreach (var t in dictionary)
             {
-                    // System.Diagnostics.Debugger.Break(); // порядок не соблюдается. Проверка бессмыслена
-                }
+                if (t.Key.Length != 0)
+                    c++;
+                // System.Diagnostics.Debugger.Break(); // порядок не соблюдается. Проверка бессмыслена
+            }
+            if (c != dictionary.Count)
+                System.Diagnostics.Debugger.Break();
             sw.Stop();
             Console.WriteLine(sw.Elapsed);
             GC.GetTotalMemory(true);
@@ -423,12 +437,12 @@ namespace BDtest
 
             for (var i = 3; i-- > 0; )
             {
-                benchmark2(1000000);
+                benchmark2(4000000);
                 GC.Collect(0);
                 GC.Collect(1);
                 GC.Collect(2);
                 GC.GetTotalMemory(true);
-                benchmark8(1000000);
+                benchmark8(4000000);
                 Console.WriteLine("-------------------");
                 GC.Collect(0);
                 GC.Collect(1);

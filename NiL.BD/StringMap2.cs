@@ -64,10 +64,12 @@ namespace NiL.BD
         private TValue emptyKeyValue;
 
         private Record[] records = emptyRecords;
+        private int[] existedIndexes;
 
         private int count;
+        private int eicount;
 
-        private void insert(string key, TValue value, bool @throw)
+        private void insert(string key, TValue value, int hash, bool @throw, bool resizeMode)
         {
             if (key == null)
                 throw new ArgumentNullException();
@@ -83,10 +85,7 @@ namespace NiL.BD
             var elen = records.Length - 1;
             if (records.Length == 0)
                 elen = increaseSize() - 1;
-            int hash;
             int index;
-            hash = computeHash(key);
-            //hash = key.GetHashCode();
             int colisionCount = 0;
             index = hash & elen;
             do
@@ -109,36 +108,43 @@ namespace NiL.BD
 
             if (records[index].key != null)
             {
-                stat0++;
+                //stat0++;
                 while (records[index].next > 0)
                 {
-                    stat1++;
+                    //stat1++;
                     index = records[index].next - 1;
                     colisionCount++;
                 }
                 prewIndex = index;
                 while (records[index].key != null)
-                    index = (index + 87) & elen;
+                    index = (index + 1) & elen;
             }
             records[index].hash = hash;
             records[index].key = key;
             records[index].value = value;
             if (prewIndex >= 0)
                 records[prewIndex].next = index + 1;
+            if (eicount == existedIndexes.Length)
+            {
+                var newEI = new int[existedIndexes.Length << 1];
+                Array.Copy(existedIndexes, newEI, existedIndexes.Length);
+                existedIndexes = newEI;
+            }
+            existedIndexes[eicount++] = index;
             count++;
 
-            if (colisionCount > 14)
+            if (colisionCount > 15)
                 increaseSize();
         }
 
-        public int stat0;
-        public int stat1;
+        //public int stat0;
+        //public int stat1;
 
         private static int computeHash(string key)
         {
             int hash;
             var keyLen = key.Length;
-            hash = (keyLen * 0x51) ^ 0xecb901;
+            hash = keyLen * 0x51 ^ 0xecb901;
             for (var i = 0; i < keyLen; i++)
                 hash += (hash >> 28) + (hash << 4) + key[i];
             return hash;
@@ -192,26 +198,28 @@ namespace NiL.BD
             if (records.Length == 0)
             {
                 records = new Record[1];
+                existedIndexes = new int[1];
                 return 1;
             }
             //if (count > 100 && records.Length / count > 50)
             //    throw new InvalidOperationException();
             var oldRecords = records;
             records = new Record[records.Length << 1];
+            int i = 0, c = eicount;
             count = 0;
-            if (emptyKeyValueExists)
-                count++;
-            for (var i = oldRecords.Length; i-- > 0; )
+            eicount = 0;
+            for (; i < c; i++)
             {
-                if (oldRecords[i].key != null)
-                    insert(oldRecords[i].key, oldRecords[i].value, false);
+                var index = existedIndexes[i];
+                if (oldRecords[index].key != null)
+                    insert(oldRecords[index].key, oldRecords[index].value, oldRecords[index].hash, false, true);
             }
             return records.Length;
         }
 
         public void Add(string key, TValue value)
         {
-            insert(key, value, true);
+            insert(key, value, computeHash(key), true, false);
         }
 
         public bool ContainsKey(string key)
@@ -240,7 +248,7 @@ namespace NiL.BD
             }
             set
             {
-                insert(key, value, false);
+                insert(key, value, computeHash(key), false, false);
             }
         }
 
@@ -281,21 +289,12 @@ namespace NiL.BD
 
         public IEnumerator<KeyValuePair<string, TValue>> GetEnumerator()
         {
-            int c = 0;
             if (emptyKeyValueExists)
-            {
                 yield return new KeyValuePair<string, TValue>("", emptyKeyValue);
-                c++;
-            }
-            for (int i = 0; i < records.Length; i++)
+            for (int i = 0; i < eicount; i++)
             {
-                if (records[i].key != null)
-                {
-                    c++;
-                    yield return new KeyValuePair<string, TValue>(records[i].key, records[i].value);
-                    if (c == count)
-                        yield break;
-                }
+                if (records[existedIndexes[i]].key != null)
+                    yield return new KeyValuePair<string, TValue>(records[existedIndexes[i]].key, records[existedIndexes[i]].value);
             }
         }
 
