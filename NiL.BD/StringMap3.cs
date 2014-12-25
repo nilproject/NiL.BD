@@ -6,8 +6,10 @@ using System.Threading.Tasks;
 
 namespace NiL.BD
 {
-    public sealed class StringMap2<TValue> : IDictionary<string, TValue>
+    public sealed class StringMap3<TValue> : IDictionary<string, TValue>
     {
+        private const bool firstCharSearch = false;
+
         private struct Record
         {
             public int next;
@@ -16,56 +18,25 @@ namespace NiL.BD
             public TValue value;
         }
 
-        //private static readonly int[] primes = new[] { 3, 7, 11, 17, 29, 41, 59, 79, 101, 131, 167, 211, 269, 347, 439, 557, 701, 881, 1109, 1399, 1753, 2203, 2767, 3461, 4337, 5431, 6791, 8501, 10631, 13291, 16619, 20789, 25997, 32503, 40637, 50821, 63533, 79423, 99289, 124121, 155161, 193957, 242449, 303073, 378869, 473597, 592019, 740041, 925063, 1156333, 1445419, 1806781, 2258479, 2823101, 3528887, 4411117, 5513917, 6892477, 8615623 };
-
-        //static int isqrt(int n)
-        //{
-        //    n = n * (1 - 2 * (n >> (sizeof(int) * 8 - 1)));
-        //    if (n < 2)
-        //        return n;
-        //    var r = 0;
-        //    var d = 1 << 3;
-        //    while (d != 0)
-        //    {
-        //        do
-        //        {
-        //            r += d;
-        //        }
-        //        while (r * r < n);
-        //        r -= d;
-        //        d >>= 1;
-        //    }
-        //    return r;
-        //}
-
-        //private static int getPrime(int min)
-        //{
-        //    if (min < primes[primes.Length - 1])
-        //        for (var i = 0; i < primes.Length; i++)
-        //            if (primes[i] >= min)
-        //                return primes[i];
-        //    for (var i = min | 1; i < int.MaxValue; i += 2)
-        //    {
-        //        var j = isqrt(i);
-        //        for (; j >= 3; j -= 2)
-        //        {
-        //            if (i % j == 0)
-        //                break;
-        //        }
-        //        if (j == 1)
-        //            return i;
-        //    }
-        //    return 2;
-        //}
-
         private static readonly Record[] emptyRecords = new Record[0];
 
         private bool emptyKeyValueExists = false;
         private TValue emptyKeyValue;
 
         private Record[] records = emptyRecords;
+        private Record[] collisedRecords = emptyRecords;
 
         private int count;
+        private int collisedCount;
+
+        public StringMap3()
+        {
+        }
+
+        public StringMap3(int p)
+        {
+            records = new Record[p];
+        }
 
         private void insert(string key, TValue value, bool @throw)
         {
@@ -80,17 +51,19 @@ namespace NiL.BD
                 //count++;
                 return;
             }
-            var elen = records.Length - 1;
+            var elen = records.Length;
             if (records.Length == 0)
-                elen = increaseSize() - 1;
+            {
+                increaseSize();
+                elen = records.Length;
+            }
+            elen--;
             int hash;
             int index;
-            hash = computeHash(key);
-            //hash = key.GetHashCode();
-            int colisionCount = 0;
-            index = hash & elen;
-            do
+            if (firstCharSearch)
             {
+                hash = key[0];
+                index = hash & elen;
                 if (records[index].hash == hash && string.CompareOrdinal(records[index].key, key) == 0)
                 {
                     if (@throw)
@@ -98,49 +71,93 @@ namespace NiL.BD
                     records[index].value = value;
                     return;
                 }
-                index = records[index].next - 1;
+            }
+            //hash = computeHash(key);
+            hash = key.GetHashCode();
+            index = hash & elen;
+            var store = records;
+            do
+            {
+                if (store[index].key != null
+                    && store[index].hash == hash
+                    && string.CompareOrdinal(store[index].key, key) == 0)
+                {
+                    if (@throw)
+                        throw new InvalidOperationException("Item already exists");
+                    store[index].value = value;
+                    return;
+                }
+                index = store[index].next - 1;
+                store = collisedRecords;
             } while (index >= 0);
             // не нашли
 
-            if (count == elen + 1)
-                elen = increaseSize() - 1;
-            int prewIndex = -1;
-            index = hash & elen;
-
-            if (records[index].key != null)
+            if (elen <= collisedCount
+                || (collisedCount >= 50 && elen <= collisedCount >> 2))
             {
-                stat0++;
-                while (records[index].next > 0)
+                increaseSize();
+                elen = ((elen + 1) << 1) - 1;
+            }
+            if (firstCharSearch)
+            {
+                index = key[0] & elen;
+                if (records[index].key == null)
                 {
-                    stat1++;
-                    index = records[index].next - 1;
+                    records[index].key = key;
+                    records[index].hash = key[0];
+                    records[index].value = value;
+                    count++;
+                    return;
+                }
+            }
+            int prewIndex = -1;
+            var prewStore = records;
+            index = hash & elen;
+            store = records;
+            int colisionCount = 0;
+            for (; ; )
+            {
+                if (store[index].key == null)
+                {
+                    store[index].hash = hash;
+                    store[index].key = key;
+                    store[index].value = value;
+                    if (prewIndex >= 0)
+                        prewStore[prewIndex].next = index + 1;
+                    if (store == collisedRecords)
+                        collisedCount++;
+                    count++;
+                    break;
+                }
+                while (store[index].next > 0)
+                {
+                    index = store[index].next - 1;
+                    store = collisedRecords;
                     colisionCount++;
                 }
+                if (collisedCount == collisedRecords.Length)
+                    increaseColisedBufferSize();
                 prewIndex = index;
-                while (records[index].key != null)
-                    index = (index + 87) & elen;
+                if (colisionCount != 0)
+                    prewStore = collisedRecords;
+                store = collisedRecords;
+                index = collisedCount;
+                while (store[index].key != null)
+                {
+                    index = (index + 1) % store.Length;
+                }
             }
-            records[index].hash = hash;
-            records[index].key = key;
-            records[index].value = value;
-            if (prewIndex >= 0)
-                records[prewIndex].next = index + 1;
-            count++;
-
-            if (colisionCount > 14)
+            if (colisionCount > 10)
                 increaseSize();
         }
-
-        public int stat0;
-        public int stat1;
 
         private static int computeHash(string key)
         {
             int hash;
             var keyLen = key.Length;
-            hash = (keyLen * 0x51) ^ 0xecb901;
+            hash = (keyLen | (keyLen << 10)) ^ 0xe0e0e0;
             for (var i = 0; i < keyLen; i++)
-                hash += (hash >> 28) + (hash << 4) + key[i];
+                hash += (hash >> 27) + (hash << 5) + key[i];
             return hash;
         }
 
@@ -163,18 +180,26 @@ namespace NiL.BD
                 value = default(TValue);
                 return false;
             }
-            var elen = records.Length - 1;
             int hash;
             int index;
-            hash = key[0];
-            index = hash & elen;
-            hash = computeHash(key);
-            //hash = key.GetHashCode();
-            for (index = hash & elen; index >= 0; index = records[index].next - 1)
+            var store = records;
+            if (firstCharSearch)
             {
-                if (records[index].hash == hash && string.CompareOrdinal(records[index].key, key) == 0)
+                hash = key[0];
+                index = (hash & int.MaxValue) % records.Length;
+                if (store[index].hash == hash && string.CompareOrdinal(store[index].key, key) == 0)
                 {
-                    value = records[index].value;
+                    value = store[index].value;
+                    return true;
+                }
+            }
+            //hash = computeHash(key);
+            hash = key.GetHashCode();
+            for (index = hash & (records.Length - 1); index >= 0; index = store[index].next - 1, store = collisedRecords)
+            {
+                if (store[index].hash == hash && string.CompareOrdinal(store[index].key, key) == 0)
+                {
+                    value = store[index].value;
                     return true;
                 }
             }
@@ -187,18 +212,31 @@ namespace NiL.BD
             return false;
         }
 
-        private int increaseSize()
+        private void increaseColisedBufferSize()
+        {
+            var oldColisedRecords = collisedRecords;
+            collisedRecords = new Record[oldColisedRecords.Length == 0 ? 1 : oldColisedRecords.Length << 1];
+            Array.Copy(oldColisedRecords, collisedRecords, oldColisedRecords.Length);
+            //for (var i = 0; i < oldColisedRecords.Length; i++)
+            //    collisedRecords[i] = oldColisedRecords[i];
+        }
+
+        private void increaseSize()
         {
             if (records.Length == 0)
             {
                 records = new Record[1];
-                return 1;
+                //values = new TValue[1];
+                return;
             }
-            //if (count > 100 && records.Length / count > 50)
-            //    throw new InvalidOperationException();
+            if (count > 100 && records.Length / count > 2)
+                throw new InvalidOperationException();
             var oldRecords = records;
+            var oldColisedRecords = collisedRecords;
+            collisedRecords = emptyRecords;
             records = new Record[records.Length << 1];
             count = 0;
+            collisedCount = 0;
             if (emptyKeyValueExists)
                 count++;
             for (var i = oldRecords.Length; i-- > 0; )
@@ -206,7 +244,11 @@ namespace NiL.BD
                 if (oldRecords[i].key != null)
                     insert(oldRecords[i].key, oldRecords[i].value, false);
             }
-            return records.Length;
+            for (var i = oldColisedRecords.Length; i-- > 0; )
+            {
+                if (oldColisedRecords[i].key != null)
+                    insert(oldColisedRecords[i].key, oldColisedRecords[i].value, false);
+            }
         }
 
         public void Add(string key, TValue value)

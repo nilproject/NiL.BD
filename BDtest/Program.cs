@@ -15,7 +15,42 @@ namespace BDtest
         private static int psrandmul = 137153;
 
         /// <summary>
-        /// StringMap
+        /// StringMap3
+        /// </summary>
+        private static void benchmark9(int size)
+        {
+            GC.Collect();
+            var dictionary = new StringMap3<int>();
+            var keys = new string[size];
+            for (int i = 0; i < keys.Length; i++)
+                keys[i] = i.ToString();
+            var sw = new Stopwatch();
+            sw.Start();
+            for (int i = 0; i < keys.Length; i++)
+                dictionary.Add(keys[(long)i * psrandmul % keys.Length], (int)(((long)i * psrandmul) % keys.Length));
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+            GC.GetTotalMemory(true);
+            sw.Restart();
+            foreach (var t in dictionary)
+            {
+                // System.Diagnostics.Debugger.Break(); // порядок не соблюдается. Проверка бессмыслена
+            }
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+            GC.GetTotalMemory(true);
+            sw.Restart();
+            for (int i = 0; i < keys.Length; i++)
+            {
+                if (dictionary[keys[i]] != i)
+                    throw new Exception();
+            }
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
+        }
+
+        /// <summary>
+        /// StringMap2
         /// </summary>
         private static void benchmark8(int size)
         {
@@ -47,6 +82,8 @@ namespace BDtest
             }
             sw.Stop();
             Console.WriteLine(sw.Elapsed);
+            Console.WriteLine(dictionary.stat0);
+            Console.WriteLine(dictionary.stat1);
         }
 
         /// <summary>
@@ -199,25 +236,21 @@ namespace BDtest
         private static void benchmark2(int size)
         {
             GC.Collect();
-            var dictionary = new Dictionary<int, string>();
+            var dictionary = new Dictionary<string, int>();
             var keys = new string[size];
             for (int i = 0; i < keys.Length; i++)
                 keys[i] = i.ToString();
             var sw = new Stopwatch();
             sw.Start();
-            for (long i = 0; i < keys.Length; i++)
-                dictionary[(int)(i * psrandmul % keys.Length)] = keys[i * psrandmul % keys.Length];
+            for (int i = 0; i < keys.Length; i++)
+                dictionary.Add(keys[(long)i * psrandmul % keys.Length], (int)(((long)i * psrandmul) % keys.Length));
             sw.Stop();
             Console.WriteLine(sw.Elapsed);
             GC.GetTotalMemory(true);
-            var index = 0;
             sw.Restart();
             foreach (var t in dictionary)
             {
-                if (t.Value != keys[index++])
-                {
-                    // System.Diagnostics.Debugger.Break(); // порядок не соблюдается. Проверка бессмыслена
-                }
+                // System.Diagnostics.Debugger.Break(); // порядок не соблюдается. Проверка бессмыслена
             }
             sw.Stop();
             Console.WriteLine(sw.Elapsed);
@@ -225,7 +258,7 @@ namespace BDtest
             sw.Restart();
             for (int i = 0; i < keys.Length; i++)
             {
-                if (dictionary[i] != keys[i])
+                if (dictionary[keys[i]] != i)
                     throw new Exception();
             }
             sw.Stop();
@@ -335,7 +368,7 @@ namespace BDtest
         {
             for (var i = min | 1; i < int.MaxValue; i += 2)
             {
-                var j = isqrt(i);
+                var j = isqrt(i) | 1;
                 for (; j >= 3; j -= 2)
                 {
                     if (i % j == 0)
@@ -357,6 +390,37 @@ namespace BDtest
 
         static void Main(string[] args)
         {
+            //var primes = new StringBuilder();
+            //for (var i = 3; i < 10000000; i = getPrime(i + (i >> 2) + 3))
+            //    primes.Append(i).Append(',');
+            //var pv = primes.ToString();
+            //Console.WriteLine(pv);
+            //Console.WriteLine(getPrime(21));
+            //return;
+
+            if (false)
+            {
+                var sm2 = new StringMap2<string>();
+                sm2["0"] = "world";
+                sm2["1"] = "world1";
+                sm2["2"] = "world2";
+                sm2["3"] = "world3";
+                sm2["4"] = "world4";
+                sm2["5"] = "world5";
+                sm2["6"] = "world6";
+                sm2["7"] = "world7";
+                sm2["8"] = "world8";
+                Console.WriteLine(sm2["0"]);
+                Console.WriteLine(sm2["1"]);
+                Console.WriteLine(sm2["2"]);
+                Console.WriteLine(sm2["3"]);
+                Console.WriteLine(sm2["4"]);
+                Console.WriteLine(sm2["5"]);
+                Console.WriteLine(sm2["6"]);
+                Console.WriteLine(sm2["7"]);
+                Console.WriteLine(sm2["8"]);
+            }
+
             for (var i = 3; i-- > 0; )
             {
                 benchmark2(1000000);
