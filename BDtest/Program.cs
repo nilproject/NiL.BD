@@ -424,6 +424,7 @@ namespace BDtest
                 sm2["6"] = "world6";
                 sm2["7"] = "world7";
                 sm2["8"] = "world8";
+
                 Console.WriteLine(sm2["0"]);
                 Console.WriteLine(sm2["1"]);
                 Console.WriteLine(sm2["2"]);
@@ -434,7 +435,26 @@ namespace BDtest
                 Console.WriteLine(sm2["7"]);
                 Console.WriteLine(sm2["8"]);
             }
+            else if (true)
+            {
 
+                for (var i = 0; i < 10000; i++)
+                {
+                    var sm2 = new StringMap2<int>();
+                    for (var j = 0; j < 10000; j++)
+                        sm2["test key " + j] = j;
+                    if (!sm2.Remove("test key " + i))
+                        throw new Exception();
+                    for (var j = 0; j < 10000; j++)
+                    {
+                        if (j == i)
+                            continue;
+                        else if (sm2["test key " + j] != j)
+                            throw new Exception();
+                    }
+                }
+            }
+            return;
             for (var i = 3; i-- > 0; )
             {
                 benchmark2(8000000);
